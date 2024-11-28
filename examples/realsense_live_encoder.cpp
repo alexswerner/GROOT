@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
                          rs2_rs400_visual_preset::RS2_RS400_VISUAL_PRESET_HIGH_ACCURACY);
     ir_sensor.set_option(rs2_option::RS2_OPTION_DEPTH_UNITS, 0.001f);
 
-    unsigned int avgCompSize = 0;
+    std::ofstream outfile("stream.bin",std::ios_base::out|std::ios_base::binary);
     while (true) {
         // cout << "[MAIN] File name " << filelist[i] << endl;
         //  TODO: read input from librealsense frame
@@ -98,7 +98,8 @@ int main(int argc, char *argv[]) {
         auto points = pc.calculate(depth);
 
         auto start_time = std::chrono::high_resolution_clock::now();
-        enc.encode(points_to_pcl(points, color));
+        auto payload = enc.encode(points_to_pcl(points, color));
+        outfile.write(reinterpret_cast<char const *>(payload.data()),payload.size());
         auto stop_time = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> ms_double = stop_time - start_time;
         std::cout << "time: " << ms_double.count() << std::endl;
