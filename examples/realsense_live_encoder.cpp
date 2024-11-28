@@ -97,8 +97,26 @@ int main(int argc, char *argv[]) {
         // This call should direction insert points into the octree
         auto points = pc.calculate(depth);
         auto pointcloud = points_to_pcl(points, color);
+
+        auto pc_valid = std::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
+        pc_valid->resize(pointcloud->size());
+        std::size_t valid_points = 0;
+        for (auto const &p : pointcloud->points) {
+            if (std::isfinite(p.z) && p.z != 0) {
+                pc_valid->points[valid_points++] = p;
+            }
+        }
+        if (valid_points == 0) {
+            throw std::runtime_error("No valid points");
+        }
+        std::cout << "Valid points: " << valid_points << std::endl;
+        pc_valid->resize(valid_points);
+        pc_valid->height = 1;
+        pc_valid->width = static_cast<std::uint32_t>(valid_points);
+        pc_valid->is_dense = true;
+
         auto start_time = std::chrono::high_resolution_clock::now();
-        auto payload = enc.encode(pointcloud);
+        auto payload = enc.encode(pc_valid);
         auto stop_time = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> ms_double = stop_time - start_time;
         std::cout << "Encoding took " << ms_double.count() << "ms resulting in a payload size of "
