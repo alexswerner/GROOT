@@ -7,7 +7,7 @@
 #include <chrono>
 #include <math.h>
 #include <pcl/filters/passthrough.h>
-#include "Frame.hpp"
+#include "groot/Frame.hpp"
 
 std::tuple<int, int, int> RGB_Texture(rs2::video_frame texture, rs2::texture_coordinate Texture_XY)
 {

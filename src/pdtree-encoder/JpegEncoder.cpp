@@ -1,4 +1,4 @@
-#include "JpegEncoder.hpp"
+#include "groot/JpegEncoder.hpp"
 #include <fstream>
 #include <cstdio>
 JpegEncoder::JpegEncoder()

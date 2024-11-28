@@ -1,0 +1,21 @@
+cmake_minimum_required(VERSION 3.0)
+project(groot)
+
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(PCL REQUIRED COMPONENTS common io geometry kdtree search features surface visualization filters)
+include_directories(${PCL_INCLUDE_DIRS} )
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
+
+find_package(realsense2)
+include_directories(${CMAKE_SOURCE_DIR}/include)
+add_subdirectory(src)
+add_subdirectory(examples)
+
+
+
+
+
