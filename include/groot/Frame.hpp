@@ -13,6 +13,7 @@
 #include <pcl/common/transforms.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/io/ply_io.h>
+#include <pcl/gpu/octree/octree.hpp>
 #include <pcl/octree/octree.h>
 #include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <pcl/point_types.h>
@@ -114,7 +115,12 @@ class Frame {
         // Normal octree
         {
             ScopeTimer x("deleteTree");
-        octree_.deleteTree();
+            if(octree_) {
+                octree_->deleteTree();
+            }
+            if(octree_gpu_) {
+                octree_gpu_->clear();
+            }
         }
         pcl::PointCloud<PointType>::Ptr temp_cloud(new pcl::PointCloud<PointType>);
         cloud_ = temp_cloud;
@@ -149,9 +155,10 @@ class Frame {
 
     int frame_index_ = 0;
     pcl::PointCloud<PointType>::Ptr cloud_;
-    // pcl::octree::OctreePointCloud<PointType> octree_;
+    
     typedef pcl::octree::OctreePointCloudChangeDetector<PointType> octree_t;
-    octree_t octree_;
+    std::unique_ptr<octree_t> octree_;
+    std::unique_ptr<pcl::gpu::Octree> octree_gpu_;
     int octree_depth_ = 0;
     int max_breadth_depth_ = 0;
     int num_points_ = 0;

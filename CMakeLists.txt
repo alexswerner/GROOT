@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 message("PATH" ${CMAKE_MODULE_PATH})
-find_package(PCL 1.13 REQUIRED COMPONENTS common io geometry kdtree search features surface visualization filters)
+find_package(PCL 1.13 REQUIRED COMPONENTS common io geometry kdtree search features surface visualization filters gpu_containers gpu_octree)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})

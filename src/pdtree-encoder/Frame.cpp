@@ -85,9 +85,12 @@ uint8_t getDepthFourBits(uint8_t val) {
     return mapped;
 }
 
-Frame::Frame() : octree_(1.0) {
+Frame::Frame() {
     pcl::PointCloud<PointType>::Ptr temp_cloud(new pcl::PointCloud<PointType>);
     cloud_ = temp_cloud;
+
+    octree_ = std::make_unique<octree_t>(1.0);
+    octree_gpu_ = std::make_unique<pcl::gpu::Octree>();
 
     /*-------TEST - for zstd compression-------
       ress_.fBufferSize = MAX_FILE_SIZE;
@@ -129,21 +132,66 @@ void Frame::transformPointCloud(pcl::PointCloud<PointType>::Ptr cloud,
 }
 
 void Frame::generateOctree(float voxelSize) {
+    pcl::PointXYZRGB minp, maxp;
+    pcl::getMinMax3D(*cloud_, minp, maxp);
+    std::cout << "BB" << " " << minp.x << " " << maxp.x << " " << minp.y << " " << maxp.y << " "
+              << minp.z << " " << maxp.z << std::endl;
 
-    octree_.setResolution(voxelSize);
-    octree_.setInputCloud(cloud_);
-    octree_.defineBoundingBox();
-    {
-        //ScopeTimer x("   addPointsFromInputCloud");
-        octree_.addPointsFromInputCloud();
+    if (octree_gpu_) {
+        // Strip color data
+        pcl::PointCloud<pcl::PointXYZ> pc_without_colors;
+        pcl::copyPointCloud(*cloud_, pc_without_colors);
+        // Copy to GPU
+        pcl::gpu::DeviceArray<pcl::PointXYZ> pc_device;
+        pc_device.upload(pc_without_colors.points.data(), pc_without_colors.points.size());
+        // Build GPU octree
+        octree_gpu_->setCloud(pc_device);
+        octree_depth_ = octree_gpu_->getOctreeDepth();
+        float octree_gpu_bb_size = voxelSize * std::pow(2, octree_depth_ - 1);
+        octree_gpu_->defineBoundingBox(minp.x, minp.y, minp.z, minp.x + octree_gpu_bb_size,
+                                       minp.y + octree_gpu_bb_size, minp.z + octree_gpu_bb_size);
+        {
+            // ScopeTimer x("   addPointsFromInputCloud");
+            octree_gpu_->build();
+        }
+        octree_gpu_->internalDownload();
+
+        float min_x, min_y, min_z, max_x, max_y, max_z;
+        octree_gpu_->getBoundingBox(min_x, min_y, min_z, max_x, max_y, max_z);
+        std::cout << "OCTREE_GPU BB" << " " << min_x << " " << max_x << " " << min_y << " " << max_y
+                  << " " << min_z << " " << max_z << std::endl;
+        std::cout << "OCTREE_GPU depth " << octree_depth_ << std::endl;
+        root_center_ =
+            Eigen::Vector3f((min_x + max_x) / 2, (min_y + max_y) / 2, (min_z + max_z) / 2);
+        root_sidelength_ = max_x - min_x; // TODO: verify this
+
+        octree_depth_ = 11; // Verify this
+    }
+    if (octree_) {
+        octree_->setResolution(voxelSize);
+        octree_->setInputCloud(cloud_);
+        octree_->defineBoundingBox();
+        double min_x, min_y, min_z, max_x, max_y, max_z;
+        octree_->getBoundingBox(min_x, min_y, min_z, max_x, max_y, max_z);
+        std::cout << "OCTREE BB1" << " " << min_x << " " << max_x << " " << min_y << " " << max_y
+                  << " " << min_z << " " << max_z << std::endl;
+
+        {
+            // ScopeTimer x("   addPointsFromInputCloud");
+            octree_->addPointsFromInputCloud();
+        }
+        octree_->getBoundingBox(min_x, min_y, min_z, max_x, max_y, max_z);
+        std::cout << "OCTREE BB2" << " " << min_x << " " << max_x << " " << min_y << " " << max_y
+                  << " " << min_z << " " << max_z << std::endl;
+
+        root_center_ =
+            Eigen::Vector3f((min_x + max_x) / 2, (min_y + max_y) / 2, (min_z + max_z) / 2);
+        root_sidelength_ = sqrt(octree_->getVoxelSquaredSideLen(0));
+
+        octree_depth_ = octree_->getTreeDepth();
+        std::cout << "OCTREE depth " << octree_depth_ << std::endl;
     }
 
-    double min_x, min_y, min_z, max_x, max_y, max_z;
-    octree_.getBoundingBox(min_x, min_y, min_z, max_x, max_y, max_z);
-    root_center_ = Eigen::Vector3f((min_x + max_x) / 2, (min_y + max_y) / 2, (min_z + max_z) / 2);
-    root_sidelength_ = sqrt(octree_.getVoxelSquaredSideLen(0));
-
-    octree_depth_ = octree_.getTreeDepth();
     max_breadth_depth_ = octree_depth_ - 3;
 
     // printf("--------------Frame %d Info---------------\n", frame_index_);
@@ -194,8 +242,8 @@ void Frame::compressBreadthBytesShort() {
       Serialize the occupancy bytes untill maximum breadth depth in breadth first order.
       Easier to use breadth first iterator but too slow.
     */
-    auto dfIt = octree_.depth_begin();
-    auto dfIt_end = octree_.depth_end();
+    auto dfIt = octree_->depth_begin();
+    auto dfIt_end = octree_->depth_end();
 
     uint8_t current_first = 0;
     uint8_t current_second = 0;
@@ -323,15 +371,37 @@ void Frame::compressBreadthBytes() {
 
 
     std::vector<std::future<partial_payload>> futures;
-    for (auto itr = (++octree_.depth_begin(1)); itr != octree_.depth_end() && (*itr) != 0; itr++) {
-        futures.push_back(std::async(std::launch::async, [this, itr]() {
-            std::vector<pcl::octree::IteratorState> stack(1);
-            auto &state = stack.back();
-            state.node_ = itr.getCurrentOctreeNode();
-            state.key_ = itr.getCurrentOctreeKey();
-            state.depth_ = itr.getCurrentOctreeDepth();
-            itr_t thread_itr(&octree_, 99, &stack.back(), stack);
-            return this->recurse_octree(thread_itr);
+    auto itr = (++octree_->depth_begin(1));
+    for (auto idx = 0; idx < 8; idx++, itr++) {
+        futures.push_back(std::async(std::launch::deferred, [this, itr, idx]() {
+            try {
+                partial_payload pp;
+                if (octree_) {
+                    if ((*itr) != 0) {
+                        std::vector<pcl::octree::IteratorState> stack(1);
+                        auto &state = stack.back();
+                        state.node_ = itr.getCurrentOctreeNode();
+                        state.key_ = itr.getCurrentOctreeKey();
+                        state.depth_ = itr.getCurrentOctreeDepth();
+                        itr_t thread_itr(&(*octree_), 99, &stack.back(), stack);
+                        pp = this->recurse_octree(thread_itr);
+                    } else {
+                        pp.breadth_bytes.resize(octree_depth_);
+                    }
+                    if (idx == 0) {
+                        pp.breadth_bytes.at(0).push_back(0xFF); // TODO: check if correct
+                    }
+                }
+                partial_payload pp_gpu;
+                if (octree_gpu_) {
+                    octree_gpu_->groot_recurse_octree(idx, pp_gpu.breadth_bytes, pp_gpu.depth_list,
+                                                      pp_gpu.point_indices);
+                }
+                return pp;
+            } catch (std::exception const &ex) {
+                throw std::runtime_error(std::string("Exception in idx=") + std::to_string(idx) +
+                                         " " + ex.what());
+            }
         }));
     }
     for(auto & f : futures) {
