@@ -1,0 +1,2 @@
+add_executable(groot_test groot_test.cpp)
+target_link_libraries(groot_test groot)
