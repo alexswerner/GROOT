@@ -1,5 +1,5 @@
 *.zip
 longdress
-GrootServer/pdtree-encoder/build/
-GrootServer/pdtree-encoder/compressed_files/
-GrootServer/pdtree-encoder/test_image.jpg
+build/
+build_*
+.vscode

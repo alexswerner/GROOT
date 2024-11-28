@@ -1,27 +1,26 @@
 #pragma once
-#include <iostream>
-#include <vector>
-#include <fstream>
 #include <bitset>
 #include <chrono>
+#include <fstream>
+#include <iostream>
 #include <math.h>
 #include <string>
+#include <vector>
 
 #include <Eigen/Dense>
 
-#include <pcl/point_types.h>
+#include "JpegEncoder.hpp"
+#include <pcl/common/transforms.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/io/ply_io.h>
 #include <pcl/octree/octree.h>
 #include <pcl/octree/octree_pointcloud_changedetector.h>
-#include <pcl/common/transforms.h>
-#include "JpegEncoder.hpp"
+#include <pcl/point_types.h>
 
 using namespace std;
 using PointType = pcl::PointXYZRGB;
 
-struct Color
-{
+struct Color {
     int index;
     uint8_t r;
     uint8_t g;
@@ -29,8 +28,7 @@ struct Color
     Color() : index(0), r(0), g(0), b(0) {}
 };
 
-struct FrameHeader
-{
+struct FrameHeader {
     char frame_type;
     int num_points;
     int num_breadth_bytes;
@@ -43,29 +41,27 @@ struct FrameHeader
     float root_sidelength;
 };
 
-struct FramePayload
-{
+struct FramePayload {
     vector<uint8_t> breadth_bytes;
     vector<uint8_t> depth_bytes;
     vector<uint8_t> breadth_leaf_indices;
     vector<uint8_t> color_bytes;
 };
 
-struct Resources
-{
+struct Resources {
     uint8_t *fBuffer;
     uint8_t *cBuffer;
     size_t fBufferSize;
     size_t cBufferSize;
 };
 
-class Frame
-{
-public:
+class Frame {
+  public:
     Frame();
     ~Frame() {}
 
-    void readPointCloud(int frame_index, std::string filename, float scale, bool isFlip, float x, float y, float z);
+    void readPointCloud(int frame_index, std::string filename, float scale, bool isFlip, float x,
+                        float y, float z);
     void writeFrame(std::string filename, unsigned int *avgCompSize);
     void generateOctree(float voxelsize);
 
@@ -85,8 +81,7 @@ public:
     void generatePayload(vector<uint8_t> compressed_colors);
     std::vector<uint8_t> extractPayload();
 
-    void reset()
-    {
+    void reset() {
         frame_index_ = 0;
         octree_depth_ = 0;
         max_breadth_depth_ = 0;
@@ -102,7 +97,7 @@ public:
         child_indices_.clear();
 
         // With ChangeDetector octree
-        //octree_.switchBuffers();
+        // octree_.switchBuffers();
 
         // Normal octree
         octree_.deleteTree();
@@ -111,9 +106,11 @@ public:
         initialize();
     }
 
-protected:
+  protected:
     void initialize();
-    void transformPointCloud(pcl::PointCloud<PointType>::Ptr cloud, pcl::PointCloud<PointType>::Ptr out_cloud, float scale, bool isFlip, float x, float y, float z);
+    void transformPointCloud(pcl::PointCloud<PointType>::Ptr cloud,
+                             pcl::PointCloud<PointType>::Ptr out_cloud, float scale, bool isFlip,
+                             float x, float y, float z);
 
     // functions to generate auxiliary information
     void generateLeafNodeIndices();
@@ -137,7 +134,7 @@ protected:
 
     int frame_index_ = 0;
     pcl::PointCloud<PointType>::Ptr cloud_;
-    //pcl::octree::OctreePointCloud<PointType> octree_;
+    // pcl::octree::OctreePointCloud<PointType> octree_;
     pcl::octree::OctreePointCloudChangeDetector<PointType> octree_;
     int octree_depth_ = 0;
     int max_breadth_depth_ = 0;
@@ -168,31 +165,25 @@ protected:
     Resources ress_;
 };
 
-class GROOTEncoder
-{
-public:
-    GROOTEncoder(std::string const &morton_code_filename, float voxel_size)
-    {
+class GROOTEncoder {
+  public:
+    GROOTEncoder(std::string const &morton_code_filename, float voxel_size) {
         voxel_size_ = voxel_size;
         readImageCoder(morton_code_filename);
         jpegEncoder_ = new JpegEncoder();
     }
     typedef pcl::PointCloud<pcl::PointXYZRGB> pc_t;
     typedef pc_t::Ptr pc_ptr_t;
-    std::vector<uint8_t> encode(pc_ptr_t const &p)
-    {
+    std::vector<uint8_t> encode(pc_ptr_t const &p) {
         currentFrame.reset();
         currentFrame.setPointCloud(p);
         currentFrame.generateOctree(voxel_size_);
         bool is_user_adaptive = false; // with colors
         bool isShort = false;
         currentFrame.compressPDTree(is_user_adaptive, isShort);
-        if (is_user_adaptive)
-        {
+        if (is_user_adaptive) {
             currentFrame.generatePayload();
-        }
-        else
-        {
+        } else {
             vector<uint8_t> colors = currentFrame.getColorBytes();
             vector<uint8_t> compressed_colors;
             compressColors(colors, compressed_colors, jpegEncoder_);
@@ -201,10 +192,9 @@ public:
         return currentFrame.extractPayload();
     }
 
-protected:
+  protected:
     float voxel_size_;
-    void readImageCoder(std::string const &imagecoder)
-    {
+    void readImageCoder(std::string const &imagecoder) {
         int imgSize = 1024;
         image_coder_order_ = new int[imgSize * imgSize];
         FILE *pFile = fopen(imagecoder.c_str(), "rb");
@@ -219,30 +209,25 @@ protected:
     // prepare jpeg encoder
     JpegEncoder *jpegEncoder_;
 
-    void compressColors(vector<uint8_t> orig_colors, vector<uint8_t> &compressed_colors, JpegEncoder *jpegEncoder_)
-    {
+    void compressColors(vector<uint8_t> orig_colors, vector<uint8_t> &compressed_colors,
+                        JpegEncoder *jpegEncoder_) {
         int color_size = orig_colors.size();
         int image_width = 1024;
         int image_height = 1024;
 
-        if (orig_colors.size() / 3 < 1024 * 512)
-        {
+        if (orig_colors.size() / 3 < 1024 * 512) {
             image_height = 512;
-        }
-        else if (orig_colors.size() / 3 >= 1024 * 1024)
-        {
+        } else if (orig_colors.size() / 3 >= 1024 * 1024) {
             image_width = 2048;
         }
 
         std::vector<uint8_t> reordered_color(image_width * image_height * 3, 255);
-        for (int i = 0; i < image_width * image_height; i++)
-        {
+        for (int i = 0; i < image_width * image_height; i++) {
             // for GROOT use this
             int idx = image_coder_order_[i];
             // for SERIAL use this
             // int idx = i;
-            if (idx < orig_colors.size() / 3)
-            {
+            if (idx < orig_colors.size() / 3) {
                 reordered_color[3 * i] = orig_colors[3 * idx];
                 reordered_color[3 * i + 1] = orig_colors[3 * idx + 1];
                 reordered_color[3 * i + 2] = orig_colors[3 * idx + 2];

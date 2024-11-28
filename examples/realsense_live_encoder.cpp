@@ -1,16 +1,16 @@
-#include <librealsense2/rs.hpp>
-#include <cstdio>
-#include <iostream>
+#include "groot/Frame.hpp"
 #include <bitset>
-#include <fstream>
-#include <sstream>
 #include <chrono>
+#include <cstdio>
+#include <fstream>
+#include <iostream>
+#include <librealsense2/rs.hpp>
 #include <math.h>
 #include <pcl/filters/passthrough.h>
-#include "groot/Frame.hpp"
+#include <sstream>
 
-std::tuple<int, int, int> RGB_Texture(rs2::video_frame texture, rs2::texture_coordinate Texture_XY)
-{
+std::tuple<int, int, int> RGB_Texture(rs2::video_frame texture,
+                                      rs2::texture_coordinate Texture_XY) {
     // Get Width and Height coordinates of texture
     int width = texture.get_width();   // Frame width in pixels
     int height = texture.get_height(); // Frame height in pixels
@@ -33,8 +33,8 @@ std::tuple<int, int, int> RGB_Texture(rs2::video_frame texture, rs2::texture_coo
     return std::tuple<int, int, int>(NT1, NT2, NT3);
 }
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_to_pcl(const rs2::points &points, rs2::video_frame const &color)
-{
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_to_pcl(const rs2::points &points,
+                                                     rs2::video_frame const &color) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
 
     auto sp = points.get_profile().as<rs2::video_stream_profile>();
@@ -44,8 +44,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_to_pcl(const rs2::points &points, 
     cloud->points.resize(points.size());
     auto ptr = points.get_vertices();
     auto Texture_Coord = points.get_texture_coordinates();
-    for (std::size_t idx = 0; idx < cloud->points.size(); idx++)
-    {
+    for (std::size_t idx = 0; idx < cloud->points.size(); idx++) {
         auto &p = cloud->points.at(idx);
         p.x = ptr->x;
         p.y = ptr->y;
@@ -68,8 +67,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_to_pcl(const rs2::points &points, 
     return newCloud;
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     std::string morton_code = argv[1];
 
     GROOTEncoder enc(morton_code, 0.002);
@@ -87,8 +85,7 @@ int main(int argc, char *argv[])
     ir_sensor.set_option(rs2_option::RS2_OPTION_DEPTH_UNITS, 0.001f);
 
     unsigned int avgCompSize = 0;
-    while (true)
-    {
+    while (true) {
         // cout << "[MAIN] File name " << filelist[i] << endl;
         //  TODO: read input from librealsense frame
         auto frames = pipe.wait_for_frames();
