@@ -57,17 +57,17 @@ class ViewController: UIViewController, MTKViewDelegate, ARSessionDelegate {
             }
             
             // prepare files to render
-            configureSession(dataset: datasetName)
-            var depthValue = (initialDepth as NSString).floatValue
+            //configureSession(dataset: datasetName)
+            let depthValue = (initialDepth as NSString).floatValue
             // Configure the renderer to draw to the view
-            renderer = Renderer(session: session, metalDevice: view.device!, renderDestination: view, userName: userNameValue, isSaveViewTrace: isSaveViewTrace, fileList: fileList, initialDepth: depthValue)
+            renderer = Renderer(session: session, metalDevice: view.device!, renderDestination: view, userName: datasetName, isSaveViewTrace: isSaveViewTrace, fileList: fileList, initialDepth: depthValue)
             
             renderer.drawRectResized(size: view.bounds.size)
             
 
         }
         
-        print("Username ", userNameValue)
+        //print("Username ", userNameValue)
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(ViewController.handleTap(gestureRecognize:)))
         view.addGestureRecognizer(tapGesture)
     }
@@ -84,8 +84,8 @@ class ViewController: UIViewController, MTKViewDelegate, ARSessionDelegate {
             filePrefix = "longdress/longdress_vox10_"
             //filePostfix = "_scaled_enc"
             filePostfix = "_scaled_enc"
-            fileStartIdx = 1051
-            fileEndIdx = 1350
+            fileStartIdx = 1136
+            fileEndIdx = 2000
             
         }
         else if(dataset == "twopeople")
@@ -118,7 +118,7 @@ class ViewController: UIViewController, MTKViewDelegate, ARSessionDelegate {
         {
         for i in fileStartIdx...fileEndIdx
         {
-            fileList.append(filePrefix + String(format: "%03d", i) + filePostfix)
+            fileList.append(filePrefix + String(format: "%03d", 1136) + filePostfix)
             //fileList.append(filePrefix + String(i) + filePostfix)
         }
         }

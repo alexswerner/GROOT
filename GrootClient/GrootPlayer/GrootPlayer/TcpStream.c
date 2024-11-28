@@ -104,10 +104,10 @@ void cGenerateMortonCode()
 
 int tcp_connect(const char *ipaddr, int port)
 {
-    int socket_ = socket(PF_INET, SOCK_STREAM, 0);
+    int socket_ = socket(PF_INET6, SOCK_STREAM, 0);
     printf("KJLEE socket %d\n",socket_);
     
-    if((socket_ = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+    if((socket_ = socket(PF_INET6, SOCK_STREAM, 0)) < 0) {
         printf("[KJLEE] make new socket failed\n");
         return -1;
         
@@ -116,18 +116,19 @@ int tcp_connect(const char *ipaddr, int port)
     int port_num = port;
     const char *IP_String = ipaddr;
     
-    struct sockaddr_in Server_address;
+    struct sockaddr_in6 Server_address;
     memset(&Server_address, 0, sizeof(Server_address));
-    Server_address.sin_family = AF_INET;
-    Server_address.sin_port = htons(port_num);
-    Server_address.sin_addr.s_addr = inet_addr(IP_String); //inet_addr("224.0.0.1");
+    Server_address.sin6_family = AF_INET6;
+    Server_address.sin6_port = htons(port_num);
+    inet_pton(AF_INET6, IP_String, &(Server_address.sin6_addr));
+    //Server_address.sin6_addr.s6_addr = inet_addr(IP_String); //inet_addr("224.0.0.1");
     
     if(connect(socket_, (struct sockaddr*) &Server_address, sizeof(Server_address)) == -1)
     {
         printf("[KJLEE] Cannot bind socket to %s, %d", IP_String, port_num);
         return -1;
     }else{
-        printf("[KJLEE] Successfully binded socket to %s:%d", IP_String, port_num);
+        printf("[KJLEE] Successfully binded socket to %s:%d\n", IP_String, port_num);
         return socket_;
     }
 }
@@ -139,14 +140,14 @@ void receive_manifest(Manifest* manifest)
     cGenerateMortonCode();
 }
 
-void cReceive(int socket, RxFrame* rxFrame)
+int cReceive(int socket, RxFrame* rxFrame)
 {
     
     int readlen = (int) recv(socket, &rxFrame->header, sizeof(RxFrameHeader), 0);
-    assert(readlen == sizeof(RxFrameHeader));
+    if(readlen != sizeof(RxFrameHeader))return -1;
     
     /* For debugging */
-    /*printf("[TcpStream]======RxFrameHeader=====\n");
+    printf("[TcpStream]======RxFrameHeader=====\n");
      printf("[TcpStream] frame type %c\n", rxFrame->header.frame_type);
      printf("[TcpStream] num points %d\n", rxFrame->header.num_points);
      printf("[TcpStream] num breadth bytes : %d\n", rxFrame->header.num_breadth_bytes);
@@ -156,10 +157,11 @@ void cReceive(int socket, RxFrame* rxFrame)
      printf("[TcpStream] root center : %f %f %f\n", rxFrame->header.root_center[0], rxFrame->header.root_center[1], rxFrame->header.root_center[2]);
      printf("[TcpStream] root sidelength : %f\n", rxFrame->header.root_sidelength);
      
-     printf("[TcpStream]========================\n");*/
+     printf("[TcpStream]========================\n");
     
     
     receive_payload(socket, rxFrame);
+    return 0;
     
 }
 void cReadFrameFromFile(const char *fileName, float rootTransform, RenderFrame* renderFrame)
@@ -173,7 +175,7 @@ void cReadFrameFromFile(const char *fileName, float rootTransform, RenderFrame* 
     rxFrame->header.root_center[2] -= rootTransform;
     
     /* For debugging */
-    /*printf("======RxFrameHeader=====\n");
+    printf("======RxFrameHeader=====\n");
      printf("frame type %c\n", rxFrame->header.frame_type);
      printf("num points %d\n", rxFrame->header.num_points);
      printf("num breadth bytes : %d\n", rxFrame->header.num_breadth_bytes);
@@ -183,7 +185,7 @@ void cReadFrameFromFile(const char *fileName, float rootTransform, RenderFrame* 
      printf("root center : %f %f %f\n", rxFrame->header.root_center[0], rxFrame->header.root_center[1], rxFrame->header.root_center[2]);
      printf("root sidelength : %f\n", rxFrame->header.root_sidelength);
      
-     printf("========================\n");*/
+     printf("========================\n");
     
     // Read body 
     rxFrame->breadth_bytes  = (uint8_t*)malloc(rxHeader.num_breadth_bytes * sizeof(uint8_t));

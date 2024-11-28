@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5C6A8FF72532083F001F6380 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5C7643E024909D3B004D5A3A /* Info.plist */; };
 		5C7643D024909D39004D5A3A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C7643CF24909D39004D5A3A /* AppDelegate.swift */; };
 		5C7643D224909D39004D5A3A /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 5C7643D124909D39004D5A3A /* Shaders.metal */; };
 		5C7643D524909D39004D5A3A /* Renderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C7643D424909D39004D5A3A /* Renderer.swift */; };
@@ -19,16 +18,15 @@
 		5C7643F624909D66004D5A3A /* FirstViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C7643F524909D66004D5A3A /* FirstViewController.swift */; };
 		5C93117924BF00BE003A6C62 /* TcpStream.c in Sources */ = {isa = PBXBuildFile; fileRef = 5C93117824BF00BE003A6C62 /* TcpStream.c */; };
 		5C93117B24BF00E8003A6C62 /* Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C93117A24BF00E8003A6C62 /* Utils.swift */; };
-		5C93117D24BF086E003A6C62 /* band in Resources */ = {isa = PBXBuildFile; fileRef = 5C93117C24BF086E003A6C62 /* band */; };
 		5C93118024BF0893003A6C62 /* LibZstd in Resources */ = {isa = PBXBuildFile; fileRef = 5C93117E24BF0893003A6C62 /* LibZstd */; };
 		5C93118124BF0893003A6C62 /* LibJpeg in Resources */ = {isa = PBXBuildFile; fileRef = 5C93117F24BF0893003A6C62 /* LibJpeg */; };
 		5C93118624BF08A6003A6C62 /* libturbojpeg.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5C93118324BF08A6003A6C62 /* libturbojpeg.a */; };
 		5C93118724BF08A6003A6C62 /* libjpeg.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5C93118424BF08A6003A6C62 /* libjpeg.a */; };
 		5C93118824BF08A6003A6C62 /* libzstd.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5C93118524BF08A6003A6C62 /* libzstd.a */; };
-		5CE4C4C224BFDE2B00F92F1A /* twopeople in Resources */ = {isa = PBXBuildFile; fileRef = 5CE4C4C124BFDE2B00F92F1A /* twopeople */; };
 		5CE4C4C424BFDF5600F92F1A /* TraceFile in Resources */ = {isa = PBXBuildFile; fileRef = 5CE4C4C324BFDF5600F92F1A /* TraceFile */; };
 		5CF84F8524C4AB2F00871786 /* longdress in Resources */ = {isa = PBXBuildFile; fileRef = 5CF84F8424C4AB2E00871786 /* longdress */; };
 		5CF84F8724C4C3E500871786 /* pizza in Resources */ = {isa = PBXBuildFile; fileRef = 5CF84F8624C4C3E200871786 /* pizza */; };
+		8B75E97F2C262F5200A6E54D /* twopeople in Resources */ = {isa = PBXBuildFile; fileRef = 5CE4C4C124BFDE2B00F92F1A /* twopeople */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -240,15 +238,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8B75E97F2C262F5200A6E54D /* twopeople in Resources */,
 				5CE4C4C424BFDF5600F92F1A /* TraceFile in Resources */,
 				5C93118124BF0893003A6C62 /* LibJpeg in Resources */,
 				5C7643DF24909D3B004D5A3A /* LaunchScreen.storyboard in Resources */,
 				5CF84F8724C4C3E500871786 /* pizza in Resources */,
-				5CE4C4C224BFDE2B00F92F1A /* twopeople in Resources */,
 				5CF84F8524C4AB2F00871786 /* longdress in Resources */,
 				5C93118024BF0893003A6C62 /* LibZstd in Resources */,
-				5C93117D24BF086E003A6C62 /* band in Resources */,
-				5C6A8FF72532083F001F6380 /* Info.plist in Resources */,
 				5C7643DC24909D3B004D5A3A /* Assets.xcassets in Resources */,
 				5C7643DA24909D39004D5A3A /* Main.storyboard in Resources */,
 			);
@@ -435,9 +431,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 97HED96NEV;
+				DEVELOPMENT_TEAM = SYUQ6FZH7L;
 				INFOPLIST_FILE = GrootPlayer/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -459,9 +455,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 97HED96NEV;
+				DEVELOPMENT_TEAM = SYUQ6FZH7L;
 				INFOPLIST_FILE = GrootPlayer/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

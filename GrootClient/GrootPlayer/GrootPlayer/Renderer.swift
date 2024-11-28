@@ -57,7 +57,7 @@ class Renderer {
     var rootTransform: Float = 0.0
     
     
-    
+    var socket: Int32 = 0
     
     // for write view trace file
     var testCntViewTrace = 0
@@ -137,6 +137,7 @@ class Renderer {
     
     let fileManager = FileManager.default
     
+    var server_ip : String = ""
     
     init(session: ARSession, metalDevice device: MTLDevice, renderDestination: RenderDestinationProvider, userName: String, isSaveViewTrace: Bool, fileList: [String], initialDepth: Float) {
         self.session = session
@@ -151,6 +152,11 @@ class Renderer {
         
         self.fileList = fileList
         self.isSaveViewTrace = isSaveViewTrace
+        if(userName=="") {
+            self.server_ip="2605:8d80:6a4:a478:c0da:1290:b3ca:f8f3"
+        } else {
+            self.server_ip = userName
+        }
         
         loadMetal()
         receive_manifest(manifest_ );
@@ -164,8 +170,18 @@ class Renderer {
     }
     
     func loadFrames(){
+        // tcp_connect here
         var frameCnt = 0
-        while(frameCnt < fileList.count)
+        
+        socket = tcp_connect(self.server_ip,2323);
+        if(socket < 0) {
+            print("Socket < 0 %i",socket)
+        }
+        print("Sending first acks")
+        cSend_viewAck(socket, 0, trackViewMat, trackProjMat);
+        cSend_viewAck(socket, 0, trackViewMat, trackProjMat);
+        cSend_viewAck(socket, 0, trackViewMat, trackProjMat);
+        while(true)
         {
             // To ensure 30fps when decoding is too fast
             currentRenderTime = Date()
@@ -179,13 +195,17 @@ class Renderer {
             if(renderFrameQueue.count < 100)
             {
                 autoreleasepool{
+                    var rxFrame = UnsafeMutablePointer<RxFrame>.allocate(capacity: 1)
                     var renderFrame = UnsafeMutablePointer<RenderFrame>.allocate(capacity: 1)
-                    let readFilePath = Bundle.main.path(forResource: fileList[frameCnt], ofType: "bin")!
-                    cReadFrameFromFile(readFilePath.cString(using: .utf8), rootTransform, renderFrame)
-                    renderFrameQueue.enqueue(renderFrame)
-                    
-                    
-                    frameCnt = frameCnt + 1
+                    //let readFilePath = Bundle.main.path(forResource: fileList[frameCnt], ofType: "bin")!
+                    //cReadFrameFromFile(readFilePath.cString(using: .utf8), rootTransform, renderFrame)
+                    let res = cReceive(socket, rxFrame);
+                    if(res == 0) {
+                        cDecode(rxFrame,renderFrame);
+                        renderFrameQueue.enqueue(renderFrame)
+                        
+                        frameCnt = frameCnt + 1
+                    }
                 }
             }
         }
@@ -424,6 +444,7 @@ class Renderer {
             // To update in 30fps because draw calls in 60fps
             if(isUpdateFrame){
                 updateFrame()
+                cSend_viewAck(socket, 0, trackViewMat, trackProjMat)
                 isUpdateFrame = false
             }else{
                 isUpdateFrame = true

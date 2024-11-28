@@ -102,7 +102,7 @@ int tcp_connect(const char *ipaddr, int port);
 void receive_manifest(Manifest* manifest);
 
 
-void cReceive(int socket, RxFrame* rxFrame);
+int cReceive(int socket, RxFrame* rxFrame);
 void receive_payload(int socket, RxFrame* rxFrame);
 void cSend_viewAck(int socket, int chunkIdx, matrix_float4x4 viewMat, matrix_float4x4 projMat);
 
