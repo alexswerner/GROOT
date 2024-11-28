@@ -6,3 +6,7 @@ endif(realsense2_FOUND)
 
 add_executable(decode_files decode_files.cpp)
 target_link_libraries(decode_files groot)
+
+
+add_executable(stream_decoder stream_decoder.cpp)
+target_link_libraries(stream_decoder groot)

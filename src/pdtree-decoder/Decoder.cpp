@@ -26,6 +26,67 @@ void Decoder::readManifest(std::string filename, Manifest manifest) {
     manifest.key_frame_interval = 1;
     manifest.max_breadth_depth_sidelength = 0.008;
 }
+
+void xread(uint8_t * dst, std::size_t size, std::size_t count, const uint8_t **src) {
+    std::memcpy(dst, *src, size * count);
+    (*src) += size * count;
+}
+
+void Decoder::decodePayload(std::vector<uint8_t> const &payload) {
+    RxFrameHeader header;
+    auto p = payload.data();
+    xread(reinterpret_cast<uint8_t*>(&header), sizeof(RxFrameHeader), 1, &p);
+
+    printf("[DECODE] =========RxFrameHeader=========\n");
+    printf("[DECODE] frame type %d\n", header.frame_type);
+    printf("[DECODE] num breadth bytes %d\n", header.num_breadth_bytes);
+    printf("[DECODE] num breadth nodes: %d\n", header.num_breadth_nodes);
+
+    printf("[DECODE] num depth bytes: %d\n", header.num_depth_bytes);
+    printf("[DECODE] num color bytes :%d\n", header.num_color_bytes);
+    printf("[DECODE] num points %d\n", header.num_points);
+    printf("[DECODE] sidelength %f\n", header.root_sidelength);
+    printf("================================\n");
+    RxFrame rxFrame;
+    rxFrame.header = header;
+    rxFrame.breadth_bytes = (uint8_t *)malloc(header.num_breadth_bytes * sizeof(uint8_t));
+    rxFrame.depth_bytes = (uint8_t *)malloc(header.num_depth_bytes * sizeof(uint8_t));
+    rxFrame.breadth_leaf_num = (uint8_t *)malloc(header.num_breadth_nodes * sizeof(uint8_t));
+    rxFrame.color_bytes = (uint8_t *)malloc(header.num_color_bytes * sizeof(uint8_t));
+
+    xread(rxFrame.breadth_bytes, sizeof(uint8_t), header.num_breadth_bytes, &p);
+    xread(rxFrame.depth_bytes, sizeof(uint8_t), header.num_depth_bytes, &p);
+    xread(rxFrame.breadth_leaf_num, sizeof(uint8_t), header.num_breadth_nodes, &p);
+    xread(rxFrame.color_bytes, sizeof(uint8_t), header.num_color_bytes, &p);
+
+    render_frame_.center_list =
+        (Eigen::Vector4f *)malloc(header.num_points * sizeof(Eigen::Vector4f));
+    render_frame_.depth_bytes = (uint8_t *)malloc(header.num_points * 3 * sizeof(uint8_t));
+    render_frame_.color_bytes = (uint8_t *)malloc(header.num_points * 4 * sizeof(uint8_t));
+    clock_t begin_time = clock();
+    decodeBreadthBytes(header, rxFrame.breadth_bytes, rxFrame.breadth_leaf_num);
+    clock_t end_time = clock();
+    long msec = end_time - begin_time;
+    printf("[Decoder] decode time1 : %.3f\n", (double)((double)msec / CLOCKS_PER_SEC));
+
+    decodeDepthBytes(header.num_points, header.num_depth_bytes, rxFrame.depth_bytes);
+    clock_t end_time2 = clock();
+    msec = end_time2 - end_time;
+    printf("[Decoder] decode time2 : %.3f\n", (double)((double)msec / CLOCKS_PER_SEC));
+
+    decodeColorBytes(header.num_points, header.num_color_bytes, rxFrame.color_bytes);
+    clock_t end_time3 = clock();
+    msec = end_time3 - end_time2;
+    printf("[Decoder] decode time1 : %.3f\n", (double)((double)msec / CLOCKS_PER_SEC));
+
+    //     clock_t end_time = clock();
+    //    long msec = end_time - begin_time;
+    //    printf("[Decoder] decode time1 : %.3f\n", (double)((double)msec / CLOCKS_PER_SEC));
+
+    render_frame_.frame_type = header.frame_type;
+    render_frame_.num_points = header.num_points;
+}
+
 void Decoder::decodePDTreeFile(std::string filename) {
     FILE *pFile;
     pFile = fopen(filename.c_str(), "rb");

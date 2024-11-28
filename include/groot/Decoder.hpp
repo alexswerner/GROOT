@@ -94,6 +94,7 @@ class Decoder {
     void decodePDTreeFile(std::string filename);
     void generatePointCloud(std::string filename, Manifest manifest);
     void write_decode(std::string filename);
+    void decodePayload(std::vector<uint8_t> const &payload);
 
   private:
     void decodeBreadthBytes(RxFrameHeader header, uint8_t *breadth_bytes,
