@@ -13,13 +13,12 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/io/ply_io.h>
 #include <pcl/octree/octree.h>
+#include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <pcl/common/transforms.h>
 #include <zstd.h>
 
-
 using namespace std;
 using PointType = pcl::PointXYZRGB;
-
 
 struct Color
 {
@@ -27,16 +26,15 @@ struct Color
     uint8_t r;
     uint8_t g;
     uint8_t b;
-    Color():index(0), r(0), g(0), b(0) {}
+    Color() : index(0), r(0), g(0), b(0) {}
 };
-
 
 struct FrameHeader
 {
     char frame_type;
     int num_points;
     int num_breadth_bytes;
-    int num_breadth_nodes; 
+    int num_breadth_nodes;
     int num_depth_bytes;
     int num_color_bytes;
     int num_icp_nodes;
@@ -55,105 +53,120 @@ struct FramePayload
 
 struct Resources
 {
-    uint8_t* fBuffer;
-    uint8_t* cBuffer;
+    uint8_t *fBuffer;
+    uint8_t *cBuffer;
     size_t fBufferSize;
     size_t cBufferSize;
-    ZSTD_CCtx* cctx;
+    ZSTD_CCtx *cctx;
 };
-
 
 class Frame
 {
-    public:
-        Frame();
-        ~Frame(){}
+public:
+    Frame();
+    ~Frame() {}
 
+    void readPointCloud(int frame_index, std::string filename, float scale, bool isFlip, float x, float y, float z);
+    void writeFrame(std::string filename, unsigned int *avgCompSize);
+    void generateOctree(float voxelsize);
 
+    void compressPDTree(int is_user_adaptive, bool isShort);
 
-        void readPointCloud(int frame_index, std::string filename, float scale, bool isFlip, float x, float y, float z);
-        void writeFrame(std::string filename, unsigned int* avgCompSize);
-        void generateOctree(float voxelsize);
+    vector<uint8_t> getColorBytes();
+    pcl::PointCloud<PointType>::Ptr getPointCloud();
+    void setPointCloud(pcl::PointCloud<PointType>::Ptr const &pc) { cloud_ = pc; };
+    // vector<PointType> getOrderedPoints();
+    vector<vector<uint8_t>> getBreadthBytes();
 
+    vector<Eigen::Vector4f> get_debug_point_list();
+    vector<uint8_t> get_debug_colors();
 
-        void compressPDTree(int is_user_adaptive, bool isShort);
+    // generate payload with or without color
+    void generatePayload();
+    void generatePayload(vector<uint8_t> compressed_colors);
 
-        vector<uint8_t> getColorBytes();
-        pcl::PointCloud<PointType>::Ptr getPointCloud();
-        //vector<PointType> getOrderedPoints();
-        vector<vector<uint8_t>> getBreadthBytes();
+    void reset()
+    {
+        frame_index_ = 0;
+        octree_depth_ = 0;
+        max_breadth_depth_ = 0;
+        num_points_ = 0;
+        orig_num_points_ = 0;
+        breadth_bytes_.clear();
+        depth_list_.clear();
+        color_list_.clear();
 
+        point_indices_.clear();
+        compressed_depth_bytes_.clear();
+        leaf_indices_.clear();
+        child_indices_.clear();
 
-        vector<Eigen::Vector4f> get_debug_point_list();
-        vector<uint8_t> get_debug_colors();
+        // With ChangeDetector octree
+        //octree_.switchBuffers();
 
+        // Normal octree
+        octree_.deleteTree();
+        pcl::PointCloud<PointType>::Ptr temp_cloud(new pcl::PointCloud<PointType>);
+        cloud_ = temp_cloud;
+        initialize();
+    }
 
-        // generate payload with or without color
-        void generatePayload();
-        void generatePayload(vector<uint8_t> compressed_colors);
+protected:
+    void initialize();
+    void transformPointCloud(pcl::PointCloud<PointType>::Ptr cloud, pcl::PointCloud<PointType>::Ptr out_cloud, float scale, bool isFlip, float x, float y, float z);
 
-    protected:
+    // functions to generate auxiliary information
+    void generateLeafNodeIndices();
+    void generateChildNodeIndices();
 
-        void initialize();   
-        void transformPointCloud(pcl::PointCloud<PointType>::Ptr cloud, pcl::PointCloud<PointType>::Ptr out_cloud, float scale, bool isFlip,  float x, float y , float z);
-        
-        // functions to generate auxiliary information
-        void generateLeafNodeIndices();
-        void generateChildNodeIndices();
+    // functions for saving compressed files
+    void generateHeader(char type);
+    void reorderDepthColor();
+    void reorderDepthColorShort();
 
-        // functions for saving compressed files
-        void generateHeader(char type);
-        void reorderDepthColor();
-        void reorderDepthColorShort();
+    // functions for efficient octree probing
+    Eigen::Vector3f getChildCenter(Eigen::Vector3f parentCenter, float sidelen, int idx);
+    void getNodesInOctreeContainer(pcl::octree::OctreeNode *currentNode, std::vector<int> &indices);
 
-        // functions for efficient octree probing
-        Eigen::Vector3f getChildCenter(Eigen::Vector3f parentCenter,float sidelen, int idx);
-        void getNodesInOctreeContainer(pcl::octree::OctreeNode* currentNode, std::vector<int>& indices);
+    // functions to compress breadth bytes
+    void compressBreadthBytes();
+    void compressBreadthBytesShort();
+    // functions to compress depth bytes
+    void compressDepthBytes(int is_user_adaptive);
+    void compressDepthBytesZstd(vector<uint8_t> depth_bytes);
 
-        // functions to compress breadth bytes
-        void compressBreadthBytes();
-        void compressBreadthBytesShort();
-        // functions to compress depth bytes
-        void compressDepthBytes(int is_user_adaptive);
-        void compressDepthBytesZstd(vector<uint8_t> depth_bytes);
+    // variables
 
+    int frame_index_ = 0;
+    pcl::PointCloud<PointType>::Ptr cloud_;
+    //pcl::octree::OctreePointCloud<PointType> octree_;
+    pcl::octree::OctreePointCloudChangeDetector<PointType> octree_;
+    int octree_depth_ = 0;
+    int max_breadth_depth_ = 0;
+    int num_points_ = 0;
+    int orig_num_points_ = 0;
 
-        // variables
+    Eigen::Vector3f root_center_;
+    float root_sidelength_;
 
-        int frame_index_ = 0;
-        pcl::PointCloud<PointType>::Ptr cloud_;
-        pcl::octree::OctreePointCloud<PointType> octree_;
-        int octree_depth_ = 0;
-        int max_breadth_depth_ = 0;
-        int num_points_ = 0;
-        int orig_num_points_= 0;
+    vector<vector<uint8_t>> breadth_bytes_;
+    vector<uint8_t> depth_list_;
+    vector<Color> color_list_;
 
-        Eigen::Vector3f root_center_;
-        float root_sidelength_;
+    vector<int> point_indices_;
 
-        vector<vector<uint8_t>> breadth_bytes_;
-        vector<uint8_t> depth_list_;
-        vector<Color> color_list_;
+    vector<uint8_t> compressed_depth_bytes_;
 
-        vector<int> point_indices_;
+    FrameHeader header_;
+    FramePayload payload_;
 
+    // For debuggin purpose
+    vector<uint8_t> debug_color_list_;
+    vector<Eigen::Vector4f> debug_point_list_;
 
-        vector<uint8_t> compressed_depth_bytes_;
+    vector<vector<int>> leaf_indices_;
+    vector<vector<int>> child_indices_;
 
-        FrameHeader header_;  
-        FramePayload payload_;
-
-
-
-
-        //For debuggin purpose
-        vector<uint8_t> debug_color_list_;
-        vector<Eigen::Vector4f> debug_point_list_;
-
-
-        vector<vector<int>> leaf_indices_;
-        vector<vector<int>> child_indices_;
-
-        Resources ress_;
-        vector<uint8_t> depth_bytes_zstd_;
+    Resources ress_;
+    vector<uint8_t> depth_bytes_zstd_;
 };

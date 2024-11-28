@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(PCL 1.9.1 REQUIRED COMPONENTS common io geometry kdtree search features surface visualization filters)
+find_package(realsense2)
 
 file(GLOB SOURCES main.cpp JpegEncoder.cpp Frame.cpp)
 
@@ -19,6 +20,6 @@ add_definitions(${PCL_DEFINITIONS})
 
 
 include_directories(server ${PCL_INCLUDE_DIRS} )
-target_link_libraries(server ${PCL_LIBRARIES} turbojpeg zstd)
+target_link_libraries(server ${PCL_LIBRARIES} turbojpeg zstd realsense2)
 
 

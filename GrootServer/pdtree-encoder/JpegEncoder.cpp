@@ -15,7 +15,7 @@ JpegEncoder::JpegEncoder()
 int JpegEncoder::encode(vector<uint8_t> rgb_list, vector<uint8_t> &jpeg, int width, int height)
 {
 
-    printf("[JPEG] start encode\n");
+    //printf("[JPEG] start encode\n");
     uint8_t* srcBuf = new uint8_t[width * height * nbands_];
     memset(srcBuf, 0, width * height * nbands_);
     memcpy(srcBuf, &rgb_list[0], rgb_list.size());
@@ -28,20 +28,20 @@ int JpegEncoder::encode(vector<uint8_t> rgb_list, vector<uint8_t> &jpeg, int wid
     jpeg.resize(jpegSize, 0);
     memcpy(&jpeg[0], jpegBuf, jpegSize);
 
-    FILE* qFile= fopen("test_image.jpg", "wb");
-    fwrite(jpegBuf, sizeof(uint8_t), jpegSize, qFile);
+    // FILE* qFile= fopen("test_image.jpg", "wb");
+    // fwrite(jpegBuf, sizeof(uint8_t), jpegSize, qFile);
     if(tj_stat != 0)
     {   
         const char *err = (const char *) tjGetErrorStr();
         cerr << "TurboJPEG Error: " << err << " UNABLE TO COMPRESS JPEG IMAGE\n";
         tjDestroy(handle_);
         handle_ = NULL;
-        return -1;
+        throw std::runtime_error("jpeg compression failed");
     }
 
-    fclose(qFile);
+    // fclose(qFile);
 
-    delete jpegBuf;
+    if(jpegBuf)free(jpegBuf);
     delete []srcBuf;
     return 1;
 
@@ -52,7 +52,7 @@ int JpegEncoder::encode(vector<uint8_t> rgb_list, vector<uint8_t> &jpeg, int wid
 void JpegEncoder::testDecoder(vector<uint8_t> compressed_bytes, vector<uint8_t>& decoded_bytes)
 {
     tjhandle handle = tjInitDecompress();
-    if(handle < 0) printf("Can't initialize decoder\n");
+    if(handle =0) printf("Can't initialize decoder\n");
     int width = 0;
     int height = 0;
     int jpegSubsamp = 0;

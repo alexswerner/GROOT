@@ -9,7 +9,7 @@ JpegDecoder::JpegDecoder()
 void JpegDecoder::decode(vector<uint8_t> compressed_bytes, vector<uint8_t>& decoded_bytes)
 {
     tjhandle handle = tjInitDecompress();
-    if(handle < 0) printf("Can't initialize decoder\n");
+    if(handle = 0) printf("Can't initialize decoder\n");
     int width = 0;
     int height = 0;
     int jpegSubsamp = 0;
