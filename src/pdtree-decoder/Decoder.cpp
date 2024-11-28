@@ -305,7 +305,7 @@ Eigen::Vector4f Decoder::getChildCenter(Eigen::Vector4f parentCenter, float side
     return childCenter;
 }
 
-void Decoder::generatePointCloud(std::string filename, Manifest manifest) {
+std::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> Decoder::generatePointCloud() {
     for (int i = 0; i < 10; i++) {
         printf("[BREADTH] %f %f %f\n", render_frame_.center_list[i].x(),
                render_frame_.center_list[i].y(), render_frame_.center_list[i].z());
@@ -318,9 +318,20 @@ void Decoder::generatePointCloud(std::string filename, Manifest manifest) {
     for (int i = 0; i < 10; i++) {
         printf("[COLOR] %d\n", render_frame_.color_bytes[i]);
     }
+    auto pc = std::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
+    pc->resize(render_frame_.num_points);
+    for(std::size_t idx=0;idx<render_frame_.num_points;idx++) {
+        pc->points.at(idx).x = render_frame_.center_list[idx].x();
+        pc->points.at(idx).x = render_frame_.center_list[idx].y();
+        pc->points.at(idx).y = render_frame_.center_list[idx].z();
+        pc->points.at(idx).r = render_frame_.color_bytes[4*idx];
+        pc->points.at(idx).g = render_frame_.color_bytes[4*idx+1];
+        pc->points.at(idx).b = render_frame_.color_bytes[4*idx+2];
+    }
     delete (render_frame_.center_list);
     delete (render_frame_.depth_bytes);
     delete (render_frame_.color_bytes);
+    return pc;
 }
 
 void Decoder::write_decode(std::string outfile) {}

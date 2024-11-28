@@ -94,7 +94,7 @@ class Decoder {
 
     void readManifest(std::string filename, Manifest manifest);
     void decodePDTreeFile(std::string filename);
-    void generatePointCloud(std::string filename, Manifest manifest);
+    std::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> generatePointCloud();
     void write_decode(std::string filename);
     void decodePayload(std::vector<uint8_t> const &payload);
 

@@ -40,7 +40,6 @@ int main(int argc, char *argv[]) {
         std::string ply_file = outfilelist.at(i) + "_dec.ply";
         decoder.decodePDTreeFile(filelist[i]);
         printf("[MAIN] Finished decoding\n");
-        decoder.generatePointCloud(ply_file, manifest);
-        decoder.write_decode(outfile);
+        auto pc = decoder.generatePointCloud();
     }
 }

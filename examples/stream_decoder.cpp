@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
         decoder.decodePayload(payload);
         std::stringstream filename;
         filename << "out" << counter++ << ".ply";
-        decoder.generatePointCloud(filename.str(), manifest);
+        auto pc = decoder.generatePointCloud();
         // TODO: pcl::Visualizer
         if(infile.eof())break;
     }
