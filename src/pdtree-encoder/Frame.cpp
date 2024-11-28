@@ -1,5 +1,6 @@
 #include "groot/Frame.hpp"
 #include <future>
+#include <iomanip> // std::setprecision
 
 #define MAX_FILE_SIZE 3000000
 
@@ -208,11 +209,11 @@ void Frame::compressPDTree(int is_user_adaptive, bool isShort) {
     if (isShort) {
         max_breadth_depth_ += 1;
         {
-            //ScopeTimer x("compressBreadthBytesShort");
+            // ScopeTimer x("compressBreadthBytesShort");
             compressBreadthBytesShort();
         }
         {
-            //ScopeTimer x("reorderDepthColorShort");
+            // ScopeTimer x("reorderDepthColorShort");
             reorderDepthColorShort();
         }
     } else {
@@ -368,7 +369,40 @@ void Frame::compressBreadthBytes() {
     //   stack.push_back(*current_state);
     //   Here the stack containing only the child node should stop the iterator from going back up
     //   the tree
-
+    auto print = [](partial_payload const &pp) {
+        for (std::size_t bb_idx = 0; bb_idx < pp.breadth_bytes.size(); bb_idx++) {
+            std::cout << "BB" << bb_idx << " ";
+            for (auto const &e : pp.breadth_bytes.at(bb_idx)) {
+                std::cout << static_cast<std::size_t>(e) << " ";
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "DB ";
+        for (auto const &e : pp.depth_list) {
+            std::cout << static_cast<std::size_t>(e) << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "PI ";
+        for (auto const &e : pp.point_indices) {
+            std::cout << static_cast<std::size_t>(e) << " ";
+        }
+        std::cout << std::endl;
+    };
+    
+    {
+        std::cout << "=== PP ===" << std::endl;
+        auto itr = octree_->depth_begin();
+        print(this->recurse_octree(itr));
+    }
+    {
+        std::cout << "=== PP_GPU ===" << std::endl;
+        partial_payload pp_gpu;
+        if (octree_gpu_) {
+            octree_gpu_->groot_recurse_octree(-1, pp_gpu.breadth_bytes, pp_gpu.depth_list,
+                                              pp_gpu.point_indices);
+        }
+        print(pp_gpu);
+    }
 
     std::vector<std::future<partial_payload>> futures;
     auto itr = (++octree_->depth_begin(1));
@@ -404,15 +438,15 @@ void Frame::compressBreadthBytes() {
             }
         }));
     }
-    for(auto & f : futures) {
+    for (auto &f : futures) {
         auto r = f.get();
-        for(std::size_t idx=0;idx<breadth_bytes_.size();idx++) {
-            auto & dest = breadth_bytes_.at(idx);
-            auto & src = r.breadth_bytes.at(idx);
-            dest.insert(dest.end(),src.begin(),src.end());
+        for (std::size_t idx = 0; idx < breadth_bytes_.size(); idx++) {
+            auto &dest = breadth_bytes_.at(idx);
+            auto &src = r.breadth_bytes.at(idx);
+            dest.insert(dest.end(), src.begin(), src.end());
         }
-        depth_list_.insert(depth_list_.end(),r.depth_list.begin(),r.depth_list.end());
-        point_indices_.insert(point_indices_.end(),r.point_indices.begin(),r.point_indices.end());
+        depth_list_.insert(depth_list_.end(), r.depth_list.begin(), r.depth_list.end());
+        point_indices_.insert(point_indices_.end(), r.point_indices.begin(), r.point_indices.end());
     }
     generateLeafNodeIndices();
 }
