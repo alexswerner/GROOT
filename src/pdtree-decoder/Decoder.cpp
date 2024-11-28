@@ -154,7 +154,7 @@ void Decoder::decodeBreadthBytes(RxFrameHeader header, uint8_t *breadth_bytes,
     Eigen::Vector4f *centers;
     centers = (Eigen::Vector4f *)malloc(header.num_breadth_nodes * sizeof(Eigen::Vector4f));
     Eigen::Vector4f *next_centers;
-    next_centers = (Eigen::Vector4f *)malloc(header.num_breadth_nodes * sizeof(Eigen::Vector4f));
+    next_centers = (Eigen::Vector4f *)malloc(8 * 8 * sizeof(Eigen::Vector4f));
 
     centers[0].x() = header.root_center[0];
     centers[0].y() = header.root_center[1];
@@ -204,11 +204,14 @@ void Decoder::decodeDepthBytes(int num_points, int num_depth_bytes, uint8_t *dep
 {
 
     memset(render_frame_.depth_bytes, 1, num_points * 3 * sizeof(uint8_t));
-    if (num_depth_bytes * 2 / 3 == num_points) {
+    if ( (num_depth_bytes * 2 == num_points * 3) || (num_depth_bytes * 2 == (num_points * 3 + 1))) {
         printf("[DECODER] depth bytes number correct\n");
     }
-
-    for (int i = 0; i < num_depth_bytes; i++) {
+    auto end = num_depth_bytes;
+    if (num_depth_bytes * 2 == (num_points * 3 + 1)) {
+        end--;
+    }
+    for (int i = 0; i < end; i++) {
         uint8_t current_byte = depth_bytes[i];
         render_frame_.depth_bytes[2 * i + 0] = (current_byte & 15) - 1;
         render_frame_.depth_bytes[2 * i + 1] = (current_byte >> 4) - 1;
@@ -306,31 +309,31 @@ Eigen::Vector4f Decoder::getChildCenter(Eigen::Vector4f parentCenter, float side
 }
 
 std::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> Decoder::generatePointCloud() {
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < std::min(10,render_frame_.num_points); i++) {
         printf("[BREADTH] %f %f %f\n", render_frame_.center_list[i].x(),
                render_frame_.center_list[i].y(), render_frame_.center_list[i].z());
     }
 
-    for (int i = 0; i < 30; i++) {
-        printf("[DEPTH] %d\n", render_frame_.depth_bytes[i]);
-    }
+    // for (int i = 0; i < 30; i++) {
+    //     printf("[DEPTH] %d\n", render_frame_.depth_bytes[i]);
+    // }
 
-    for (int i = 0; i < 10; i++) {
-        printf("[COLOR] %d\n", render_frame_.color_bytes[i]);
-    }
+    // for (int i = 0; i < 10; i++) {
+    //     printf("[COLOR] %d\n", render_frame_.color_bytes[i]);
+    // }
     auto pc = std::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
     pc->resize(render_frame_.num_points);
     for(std::size_t idx=0;idx<render_frame_.num_points;idx++) {
         pc->points.at(idx).x = render_frame_.center_list[idx].x();
-        pc->points.at(idx).x = render_frame_.center_list[idx].y();
-        pc->points.at(idx).y = render_frame_.center_list[idx].z();
+        pc->points.at(idx).y = render_frame_.center_list[idx].y();
+        pc->points.at(idx).z = render_frame_.center_list[idx].z();
         pc->points.at(idx).r = render_frame_.color_bytes[4*idx];
         pc->points.at(idx).g = render_frame_.color_bytes[4*idx+1];
         pc->points.at(idx).b = render_frame_.color_bytes[4*idx+2];
     }
-    delete (render_frame_.center_list);
-    delete (render_frame_.depth_bytes);
-    delete (render_frame_.color_bytes);
+    free (render_frame_.center_list);
+    free (render_frame_.depth_bytes);
+    free (render_frame_.color_bytes);
     return pc;
 }
 

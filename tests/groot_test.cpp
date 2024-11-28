@@ -28,16 +28,21 @@ void groot_test(){
     pointcloud->points.at(4).y = 1.;
     pointcloud->points.at(4).z = 1.;
 
+    for(auto & p : pointcloud->points) {
+        p.r = 0xFF;
+        p.g = 0x80;
+        p.b = 0x30;
+    }
+
     GROOTEncoder enc(morton_code, 0.002);
     auto payload = enc.encode(pointcloud);
 
     Decoder decoder;
-    decoder.decodePayload(payload);
+    auto payload_without_size = std::vector<uint8_t>(payload.begin()+sizeof(int),payload.end());
+    decoder.decodePayload(payload_without_size);
     auto pointcloud_out = decoder.generatePointCloud();
     for(auto const & p : pointcloud_out->points) {
-        std::cout << "XYZRGB "
-            << p.x << " " << p.y << " " << p.z << " "
-            << p.r << " " << p.g << " " << p.b << std::endl;
+        printf("XYZRGB %4.2f %4.2f %4.2f %#x %#x %#x\n",p.x,p.y,p.z,p.r,p.g,p.b);
     }
 }
 

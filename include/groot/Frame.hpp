@@ -204,6 +204,9 @@ class GROOTEncoder {
         readImageCoder(morton_code_filename);
         jpegEncoder_ = new JpegEncoder();
     }
+    virtual ~GROOTEncoder() {
+        delete jpegEncoder_;
+    }
     typedef pcl::PointCloud<pcl::PointXYZRGB> pc_t;
     typedef pc_t::Ptr pc_ptr_t;
     std::vector<uint8_t> encode(pc_ptr_t const &p) {

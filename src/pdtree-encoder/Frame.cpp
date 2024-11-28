@@ -423,7 +423,7 @@ void Frame::compressBreadthBytes() {
                         pp.breadth_bytes.resize(octree_depth_);
                     }
                     if (idx == 0) {
-                        pp.breadth_bytes.at(0).push_back(0xFF); // TODO: check if correct
+                        pp.breadth_bytes.at(0).push_back(octree_->depth_begin().getNodeConfiguration()); // TODO: check if correct
                     }
                 }
                 partial_payload pp_gpu;
