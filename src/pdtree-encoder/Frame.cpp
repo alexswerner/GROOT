@@ -1,6 +1,7 @@
 #include "groot/Frame.hpp"
 #include <future>
 #include <iomanip> // std::setprecision
+#include <pcl/filters/crop_box.h>
 
 #define MAX_FILE_SIZE 3000000
 
@@ -90,7 +91,9 @@ Frame::Frame() {
     pcl::PointCloud<PointType>::Ptr temp_cloud(new pcl::PointCloud<PointType>);
     cloud_ = temp_cloud;
 
-    octree_ = std::make_unique<octree_t>(1.0);
+    // Right now choose one of the implementations
+    // octree_depth_ and other variables are shared.
+    // octree_ = std::make_unique<octree_t>(1.0);
     octree_gpu_ = std::make_unique<pcl::gpu::Octree>();
 
     /*-------TEST - for zstd compression-------
@@ -133,6 +136,7 @@ void Frame::transformPointCloud(pcl::PointCloud<PointType>::Ptr cloud,
 }
 
 void Frame::generateOctree(float voxelSize) {
+    // Manually compute bounding box on point cloud
     pcl::PointXYZRGB minp, maxp;
     pcl::getMinMax3D(*cloud_, minp, maxp);
     std::cout << "BB" << " " << minp.x << " " << maxp.x << " " << minp.y << " " << maxp.y << " "
@@ -140,17 +144,27 @@ void Frame::generateOctree(float voxelSize) {
 
     if (octree_gpu_) {
         // Strip color data
-        pcl::PointCloud<pcl::PointXYZ> pc_without_colors;
-        pcl::copyPointCloud(*cloud_, pc_without_colors);
-        // Copy to GPU
-        pcl::gpu::DeviceArray<pcl::PointXYZ> pc_device;
-        pc_device.upload(pc_without_colors.points.data(), pc_without_colors.points.size());
-        // Build GPU octree
-        octree_gpu_->setCloud(pc_device);
+        auto pc_without_colors = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+        pcl::copyPointCloud(*cloud_, *pc_without_colors);
+
         octree_depth_ = octree_gpu_->getOctreeDepth();
         float octree_gpu_bb_size = voxelSize * std::pow(2, octree_depth_ - 1);
         octree_gpu_->defineBoundingBox(minp.x, minp.y, minp.z, minp.x + octree_gpu_bb_size,
                                        minp.y + octree_gpu_bb_size, minp.z + octree_gpu_bb_size);
+        pcl::CropBox<pcl::PointXYZ> boxFilter;
+        auto tic = 1e-3; // increase bb size slightly to avoid numerical accuracy issues.
+        boxFilter.setMin(Eigen::Vector4f(minp.x, minp.y, minp.z, 1.));
+        boxFilter.setMax(Eigen::Vector4f(minp.x + octree_gpu_bb_size, minp.y + octree_gpu_bb_size, minp.z + octree_gpu_bb_size, 1.));
+        boxFilter.setInputCloud(pc_without_colors);
+        pcl::PointCloud<pcl::PointXYZ> pc_without_colors_cropped;
+        boxFilter.filter(pc_without_colors_cropped);
+        std::cout << "Points after crop: " << pc_without_colors_cropped.size() << std::endl;
+
+        // Copy to GPU
+        pcl::gpu::DeviceArray<pcl::PointXYZ> pc_device;
+        pc_device.upload(pc_without_colors_cropped.points.data(), pc_without_colors_cropped.points.size());
+        // Build GPU octree
+        octree_gpu_->setCloud(pc_device);
         {
             // ScopeTimer x("   addPointsFromInputCloud");
             octree_gpu_->build();
@@ -165,8 +179,6 @@ void Frame::generateOctree(float voxelSize) {
         root_center_ =
             Eigen::Vector3f((min_x + max_x) / 2, (min_y + max_y) / 2, (min_z + max_z) / 2);
         root_sidelength_ = max_x - min_x; // TODO: verify this
-
-        octree_depth_ = 11; // Verify this
     }
     if (octree_) {
         octree_->setResolution(voxelSize);
@@ -369,40 +381,41 @@ void Frame::compressBreadthBytes() {
     //   stack.push_back(*current_state);
     //   Here the stack containing only the child node should stop the iterator from going back up
     //   the tree
-    auto print = [](partial_payload const &pp) {
-        for (std::size_t bb_idx = 0; bb_idx < pp.breadth_bytes.size(); bb_idx++) {
-            std::cout << "BB" << bb_idx << " ";
-            for (auto const &e : pp.breadth_bytes.at(bb_idx)) {
-                std::cout << static_cast<std::size_t>(e) << " ";
-            }
-            std::cout << std::endl;
-        }
-        std::cout << "DB ";
-        for (auto const &e : pp.depth_list) {
-            std::cout << static_cast<std::size_t>(e) << " ";
-        }
-        std::cout << std::endl;
-        std::cout << "PI ";
-        for (auto const &e : pp.point_indices) {
-            std::cout << static_cast<std::size_t>(e) << " ";
-        }
-        std::cout << std::endl;
-    };
-    
-    {
-        std::cout << "=== PP ===" << std::endl;
-        auto itr = octree_->depth_begin();
-        print(this->recurse_octree(itr));
-    }
-    {
-        std::cout << "=== PP_GPU ===" << std::endl;
-        partial_payload pp_gpu;
-        if (octree_gpu_) {
-            octree_gpu_->groot_recurse_octree(-1, pp_gpu.breadth_bytes, pp_gpu.depth_list,
-                                              pp_gpu.point_indices);
-        }
-        print(pp_gpu);
-    }
+
+    // For debugging: non-threaded version of octree recursion
+    // auto print = [](partial_payload const &pp) {
+    //     for (std::size_t bb_idx = 0; bb_idx < pp.breadth_bytes.size(); bb_idx++) {
+    //         std::cout << "BB" << bb_idx << " ";
+    //         for (auto const &e : pp.breadth_bytes.at(bb_idx)) {
+    //             std::cout << static_cast<std::size_t>(e) << " ";
+    //         }
+    //         std::cout << std::endl;
+    //     }
+    //     std::cout << "DB ";
+    //     for (auto const &e : pp.depth_list) {
+    //         std::cout << static_cast<std::size_t>(e) << " ";
+    //     }
+    //     std::cout << std::endl;
+    //     std::cout << "PI ";
+    //     for (auto const &e : pp.point_indices) {
+    //         std::cout << static_cast<std::size_t>(e) << " ";
+    //     }
+    //     std::cout << std::endl;
+    // };
+    // {
+    //     std::cout << "=== PP ===" << std::endl;
+    //     auto itr = octree_->depth_begin();
+    //     print(this->recurse_octree(itr));
+    // }
+    // {
+    //     std::cout << "=== PP_GPU ===" << std::endl;
+    //     partial_payload pp_gpu;
+    //     if (octree_gpu_) {
+    //         octree_gpu_->groot_recurse_octree(-1, pp_gpu.breadth_bytes, pp_gpu.depth_list,
+    //                                           pp_gpu.point_indices);
+    //     }
+    //     print(pp_gpu);
+    // }
 
     std::vector<std::future<partial_payload>> futures;
     auto itr = (++octree_->depth_begin(1));
@@ -423,7 +436,9 @@ void Frame::compressBreadthBytes() {
                         pp.breadth_bytes.resize(octree_depth_);
                     }
                     if (idx == 0) {
-                        pp.breadth_bytes.at(0).push_back(octree_->depth_begin().getNodeConfiguration()); // TODO: check if correct
+                        pp.breadth_bytes.at(0).push_back(
+                            octree_->depth_begin()
+                                .getNodeConfiguration()); // TODO: check if correct
                     }
                 }
                 partial_payload pp_gpu;
@@ -431,7 +446,7 @@ void Frame::compressBreadthBytes() {
                     octree_gpu_->groot_recurse_octree(idx, pp_gpu.breadth_bytes, pp_gpu.depth_list,
                                                       pp_gpu.point_indices);
                 }
-                return pp;
+                return pp_gpu;
             } catch (std::exception const &ex) {
                 throw std::runtime_error(std::string("Exception in idx=") + std::to_string(idx) +
                                          " " + ex.what());
@@ -575,27 +590,27 @@ void Frame::generatePayload(vector<uint8_t> compressed_colors) {
 }
 
 void Frame::generateHeader(char type) {
-    // printf("[FRAME] generate header \n");
+    printf("[FRAME] generate header \n");
     memset(&header_, 0, sizeof(FrameHeader));
-    // printf("============Write header=============\n");
+    printf("============Write header=============\n");
     header_.frame_type = type;
-    // printf("Frame type: %c\n" , header_.frame_type);
+    printf("Frame type: %c\n", header_.frame_type);
     header_.num_breadth_bytes = payload_.breadth_bytes.size();
-    // printf("Number of breadth bytes till maxbreadthdepth: %d\n", header_.num_breadth_bytes);
+    printf("Number of breadth bytes till maxbreadthdepth: %d\n", header_.num_breadth_bytes);
     header_.num_breadth_nodes = payload_.breadth_leaf_indices.size();
     header_.num_depth_bytes = payload_.depth_bytes.size();
-    // printf("Number of depth bytes : %d\n", header_.num_depth_bytes);
+    printf("Number of depth bytes : %d\n", header_.num_depth_bytes);
     header_.num_color_bytes = payload_.color_bytes.size();
     header_.num_points = point_indices_.size();
     header_.num_icp_nodes = 0;
     header_.num_icp_points = 0;
 
-    // printf("Number of points: %d\n", header_.num_points);
+    printf("Number of points: %d\n", header_.num_points);
     header_.root_center = root_center_;
-    // printf("Root center: %f %f %f\n", header_.root_center.x(), header_.root_center.y(),
-    // header_.root_center.z());
+    printf("Root center: %f %f %f\n", header_.root_center.x(), header_.root_center.y(),
+           header_.root_center.z());
     header_.root_sidelength = root_sidelength_;
-    // printf("Root sidelength : %f\n", header_.root_sidelength);
+    printf("Root sidelength : %f\n", header_.root_sidelength);
 }
 
 /*
@@ -667,7 +682,7 @@ void Frame::reorderDepthColor() {
     vector<Color> reordered_color_nodes;
 
     // FOR TEST
-    pcl::PointCloud<PointType>::Ptr out_cloud(new pcl::PointCloud<PointType>);
+    // pcl::PointCloud<PointType>::Ptr out_cloud(new pcl::PointCloud<PointType>);
 
     for (int i = 0; i < numBreadthNodes; i++) {
         int startIndex = leaf_indices_.at(max_breadth_depth_).at(i);
