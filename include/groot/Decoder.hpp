@@ -55,11 +55,13 @@ struct RxFrameHeader {
     int num_breadth_nodes;
     int num_depth_bytes;
     int num_color_bytes;
+    
     int num_icp_nodes;
     int num_icp_points;
     float root_center[3];
     float root_sidelength;
 };
+
 
 struct RxFrame {
     RxFrameHeader header;
