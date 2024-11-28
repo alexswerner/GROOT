@@ -167,12 +167,15 @@ void Decoder::decodeBreadthBytes(RxFrameHeader header, uint8_t *breadth_bytes,
     int cntDepth = 0;
     while (cntBytes < header.num_breadth_bytes - 1) {
         int cntNextCenters = 0;
-
+        std::cout << "Decoding at cntBytes = " << cntBytes 
+            << " currentSideLength " << currentSideLength << ::endl;
         for (int i = 0; i < cntCenters; i++) {
             uint8_t currentByte = *(breadth_bytes + cntBytes + i);
+            std::cout << "currentByte " << std::bitset<8>(currentByte) << std::endl;
             for (int k = 0; k < 8; k++) {
                 if (((currentByte >> k) & 1) != 0) {
                     Eigen::Vector4f child_center = getChildCenter(centers[i], currentSideLength, k);
+                    std::cout << "child_center " << child_center.transpose() << std::endl;
                     next_centers[cntNextCenters] = child_center;
                     cntNextCenters++;
                 }
@@ -180,6 +183,7 @@ void Decoder::decodeBreadthBytes(RxFrameHeader header, uint8_t *breadth_bytes,
         }
         cntBytes += cntCenters;
         cntCenters = cntNextCenters;
+        std::cout << "Got " << cntNextCenters << " from this run" << std::endl;
         memcpy(centers, next_centers, cntNextCenters * sizeof(Eigen::Vector4f));
         currentSideLength = currentSideLength / 2;
         cntDepth++;
@@ -219,35 +223,36 @@ void Decoder::decodeDepthBytes(int num_points, int num_depth_bytes, uint8_t *dep
 }
 
 void Decoder::decodeColorBytes(int num_points, int num_color_bytes, uint8_t *color_bytes) {
+
     memset(render_frame_.color_bytes, 1, num_points * 4 * sizeof(uint8_t));
-    int num_nodes = num_color_bytes / 3;
-    for (int i = 0; i < num_nodes; i++) {
-        render_frame_.color_bytes[4 * i + 0] = color_bytes[3 * i + 0];
-        render_frame_.color_bytes[4 * i + 1] = color_bytes[3 * i + 1];
-        render_frame_.color_bytes[4 * i + 2] = color_bytes[3 * i + 2];
-    }
 
-    /*
-       tjhandle handle = tjInitDecompress();
-
-       uint8_t* decompressed_color;
-       int width = 0;
-       int height = 0;
-       int jpegSubsamp = 0;
-       int jpegColorSpace = 0;
+    // code for uncompressed color data
+    // int num_nodes = num_color_bytes / 3;
+    // for (int i = 0; i < num_nodes; i++) {
+    //     render_frame_.color_bytes[4 * i + 0] = color_bytes[3 * i + 0];
+    //     render_frame_.color_bytes[4 * i + 1] = color_bytes[3 * i + 1];
+    //     render_frame_.color_bytes[4 * i + 2] = color_bytes[3 * i + 2];
+    // }
 
 
+    tjhandle handle = tjInitDecompress();
 
-       tjDecompressHeader3(handle, color_bytes, num_color_bytes, &width, &height, &jpegSubsamp,
-       &jpegColorSpace);
+    uint8_t* decompressed_color;
+    int width = 0;
+    int height = 0;
+    int jpegSubsamp = 0;
+    int jpegColorSpace = 0;
 
-       decompressed_color = malloc(width * height * 4);
-       tjDecompress2(handle, color_bytes, num_color_bytes, decompressed_color,width,width * 4,
-       height, jpegColorSpace,  0);
+    tjDecompressHeader3(handle, color_bytes, num_color_bytes, &width, &height, &jpegSubsamp,
+    &jpegColorSpace);
 
-       renderFrame->color_bytes = (uint8_t*) malloc(num_points * 4 * sizeof(uint8_t));
-       memcpy(renderFrame->color_bytes, decompressed_color, num_points * 4 * sizeof(uint8_t));
-     */
+    decompressed_color = (uint8_t*)malloc(width * height * 4);
+    tjDecompress2(handle, color_bytes, num_color_bytes, decompressed_color,width,width * 4,
+    height, jpegColorSpace,  0);
+
+    //render_frame_.color_bytes = (uint8_t*) malloc(num_points * 4 * sizeof(uint8_t));
+    memcpy(render_frame_.color_bytes, decompressed_color, num_points * 4 * sizeof(uint8_t));
+     
 }
 
 void Decoder::test_sum(int cnt, vector<uint8_t> *current_input) {

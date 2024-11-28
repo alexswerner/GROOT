@@ -114,7 +114,7 @@ class Frame {
 
         // Normal octree
         {
-            ScopeTimer x("deleteTree");
+            ScopeTimer x("   deleteTree");
             if(octree_) {
                 octree_->deleteTree();
             }

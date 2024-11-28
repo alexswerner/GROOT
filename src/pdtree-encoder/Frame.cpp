@@ -93,8 +93,11 @@ Frame::Frame() {
 
     // Right now choose one of the implementations
     // octree_depth_ and other variables are shared.
-    // octree_ = std::make_unique<octree_t>(1.0);
-    octree_gpu_ = std::make_unique<pcl::gpu::Octree>();
+    if(!getenv("GPU")) {
+        octree_ = std::make_unique<octree_t>(1.0);
+    } else {
+        octree_gpu_ = std::make_unique<pcl::gpu::Octree>();
+    }
 
     /*-------TEST - for zstd compression-------
       ress_.fBufferSize = MAX_FILE_SIZE;
@@ -139,8 +142,8 @@ void Frame::generateOctree(float voxelSize) {
     // Manually compute bounding box on point cloud
     pcl::PointXYZRGB minp, maxp;
     pcl::getMinMax3D(*cloud_, minp, maxp);
-    std::cout << "BB" << " " << minp.x << " " << maxp.x << " " << minp.y << " " << maxp.y << " "
-              << minp.z << " " << maxp.z << std::endl;
+    // std::cout << "BB" << " " << minp.x << " " << maxp.x << " " << minp.y << " " << maxp.y << " "
+    //           << minp.z << " " << maxp.z << std::endl;
 
     if (octree_gpu_) {
         // Strip color data
@@ -158,7 +161,7 @@ void Frame::generateOctree(float voxelSize) {
         boxFilter.setInputCloud(pc_without_colors);
         pcl::PointCloud<pcl::PointXYZ> pc_without_colors_cropped;
         boxFilter.filter(pc_without_colors_cropped);
-        std::cout << "Points after crop: " << pc_without_colors_cropped.size() << std::endl;
+        // std::cout << "Points after crop: " << pc_without_colors_cropped.size() << std::endl;
 
         // Copy to GPU
         pcl::gpu::DeviceArray<pcl::PointXYZ> pc_device;
@@ -166,16 +169,16 @@ void Frame::generateOctree(float voxelSize) {
         // Build GPU octree
         octree_gpu_->setCloud(pc_device);
         {
-            // ScopeTimer x("   addPointsFromInputCloud");
+            ScopeTimer x("   addPointsFromInputCloud");
             octree_gpu_->build();
         }
         octree_gpu_->internalDownload();
 
         float min_x, min_y, min_z, max_x, max_y, max_z;
         octree_gpu_->getBoundingBox(min_x, min_y, min_z, max_x, max_y, max_z);
-        std::cout << "OCTREE_GPU BB" << " " << min_x << " " << max_x << " " << min_y << " " << max_y
-                  << " " << min_z << " " << max_z << std::endl;
-        std::cout << "OCTREE_GPU depth " << octree_depth_ << std::endl;
+        // std::cout << "OCTREE_GPU BB" << " " << min_x << " " << max_x << " " << min_y << " " << max_y
+        //           << " " << min_z << " " << max_z << std::endl;
+        // std::cout << "OCTREE_GPU depth " << octree_depth_ << std::endl;
         root_center_ =
             Eigen::Vector3f((min_x + max_x) / 2, (min_y + max_y) / 2, (min_z + max_z) / 2);
         root_sidelength_ = max_x - min_x; // TODO: verify this
@@ -186,23 +189,23 @@ void Frame::generateOctree(float voxelSize) {
         octree_->defineBoundingBox();
         double min_x, min_y, min_z, max_x, max_y, max_z;
         octree_->getBoundingBox(min_x, min_y, min_z, max_x, max_y, max_z);
-        std::cout << "OCTREE BB1" << " " << min_x << " " << max_x << " " << min_y << " " << max_y
-                  << " " << min_z << " " << max_z << std::endl;
+        // std::cout << "OCTREE BB1" << " " << min_x << " " << max_x << " " << min_y << " " << max_y
+        //           << " " << min_z << " " << max_z << std::endl;
 
         {
             // ScopeTimer x("   addPointsFromInputCloud");
             octree_->addPointsFromInputCloud();
         }
         octree_->getBoundingBox(min_x, min_y, min_z, max_x, max_y, max_z);
-        std::cout << "OCTREE BB2" << " " << min_x << " " << max_x << " " << min_y << " " << max_y
-                  << " " << min_z << " " << max_z << std::endl;
+        // std::cout << "OCTREE BB2" << " " << min_x << " " << max_x << " " << min_y << " " << max_y
+        //           << " " << min_z << " " << max_z << std::endl;
 
         root_center_ =
             Eigen::Vector3f((min_x + max_x) / 2, (min_y + max_y) / 2, (min_z + max_z) / 2);
         root_sidelength_ = sqrt(octree_->getVoxelSquaredSideLen(0));
 
         octree_depth_ = octree_->getTreeDepth();
-        std::cout << "OCTREE depth " << octree_depth_ << std::endl;
+        // std::cout << "OCTREE depth " << octree_depth_ << std::endl;
     }
 
     max_breadth_depth_ = octree_depth_ - 3;
@@ -234,12 +237,12 @@ void Frame::compressPDTree(int is_user_adaptive, bool isShort) {
             compressBreadthBytes();
         }
         {
-            ScopeTimer x("reorderDepthColor");
+            //ScopeTimer x("reorderDepthColor");
             reorderDepthColor();
         }
     }
     {
-        ScopeTimer x("compressDepthBytes");
+        //ScopeTimer x("compressDepthBytes");
         compressDepthBytes(is_user_adaptive);
     }
 }
@@ -440,13 +443,15 @@ void Frame::compressBreadthBytes() {
                             octree_->depth_begin()
                                 .getNodeConfiguration()); // TODO: check if correct
                     }
+                    return pp;
                 }
                 partial_payload pp_gpu;
                 if (octree_gpu_) {
                     octree_gpu_->groot_recurse_octree(idx, pp_gpu.breadth_bytes, pp_gpu.depth_list,
                                                       pp_gpu.point_indices);
+                    return pp_gpu;
                 }
-                return pp_gpu;
+                throw std::runtime_error("No octree implementation available");
             } catch (std::exception const &ex) {
                 throw std::runtime_error(std::string("Exception in idx=") + std::to_string(idx) +
                                          " " + ex.what());
@@ -590,16 +595,16 @@ void Frame::generatePayload(vector<uint8_t> compressed_colors) {
 }
 
 void Frame::generateHeader(char type) {
-    printf("[FRAME] generate header \n");
+    // printf("[FRAME] generate header \n");
     memset(&header_, 0, sizeof(FrameHeader));
     printf("============Write header=============\n");
     header_.frame_type = type;
-    printf("Frame type: %c\n", header_.frame_type);
+    // printf("Frame type: %c\n", header_.frame_type);
     header_.num_breadth_bytes = payload_.breadth_bytes.size();
-    printf("Number of breadth bytes till maxbreadthdepth: %d\n", header_.num_breadth_bytes);
+    // printf("Number of breadth bytes till maxbreadthdepth: %d\n", header_.num_breadth_bytes);
     header_.num_breadth_nodes = payload_.breadth_leaf_indices.size();
     header_.num_depth_bytes = payload_.depth_bytes.size();
-    printf("Number of depth bytes : %d\n", header_.num_depth_bytes);
+    // printf("Number of depth bytes : %d\n", header_.num_depth_bytes);
     header_.num_color_bytes = payload_.color_bytes.size();
     header_.num_points = point_indices_.size();
     header_.num_icp_nodes = 0;
@@ -607,8 +612,8 @@ void Frame::generateHeader(char type) {
 
     printf("Number of points: %d\n", header_.num_points);
     header_.root_center = root_center_;
-    printf("Root center: %f %f %f\n", header_.root_center.x(), header_.root_center.y(),
-           header_.root_center.z());
+    // printf("Root center: %f %f %f\n", header_.root_center.x(), header_.root_center.y(),
+    //        header_.root_center.z());
     header_.root_sidelength = root_sidelength_;
     printf("Root sidelength : %f\n", header_.root_sidelength);
 }
