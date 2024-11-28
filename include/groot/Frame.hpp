@@ -135,11 +135,20 @@ class Frame {
     int frame_index_ = 0;
     pcl::PointCloud<PointType>::Ptr cloud_;
     // pcl::octree::OctreePointCloud<PointType> octree_;
-    pcl::octree::OctreePointCloudChangeDetector<PointType> octree_;
+    typedef pcl::octree::OctreePointCloudChangeDetector<PointType> octree_t;
+    octree_t octree_;
     int octree_depth_ = 0;
     int max_breadth_depth_ = 0;
     int num_points_ = 0;
     int orig_num_points_ = 0;
+
+    class partial_payload {
+      public:
+        vector<vector<uint8_t>> breadth_bytes;
+        vector<uint8_t> depth_list;
+        vector<int> point_indices;
+    };
+    partial_payload recurse_octree(octree_t::DepthFirstIterator &dfIt);
 
     Eigen::Vector3f root_center_;
     float root_sidelength_;

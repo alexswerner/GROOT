@@ -1,4 +1,5 @@
 #include "groot/Frame.hpp"
+#include <future>
 
 #define MAX_FILE_SIZE 3000000
 
@@ -300,9 +301,57 @@ void Frame::compressBreadthBytesShort() {
 */
 void Frame::compressBreadthBytes() {
     breadth_bytes_.clear();
+    breadth_bytes_.resize(octree_depth_);
 
-    auto dfIt = octree_.depth_begin();
-    auto dfIt_end = octree_.depth_end();
+    typedef octree_t::DepthFirstIterator itr_t;
+
+    // split iterator idea:
+    // 1. Generate list of child nodes to expand: Use depth limited DepthFirstIterator for that
+    // 2. Generate child tree iterators manually using the advanced iterator constructor
+    //   explicit OctreeDepthFirstIterator(
+    //   OctreeT* octree_arg, <-- same as orig iterator: &octree_
+    //   uindex_t max_depth_arg, <-- 0, disabled
+    //   IteratorState* current_state, <--
+    //   const std::vector<IteratorState>& stack = std::vector<IteratorState>())
+    //   pcl::octree::IteratorState current_state;
+    //   current_state.node_;
+    //   current_state.key_;
+    //   current_state.depth_;
+    //   std::vector<IteratorState> stack;
+    //   stack.push_back(*current_state);
+    //   Here the stack containing only the child node should stop the iterator from going back up
+    //   the tree
+
+     
+
+    std::vector<std::future<partial_payload>> futures;
+    for (auto itr = (++octree_.depth_begin(1)); itr != octree_.depth_end() && (*itr) != 0; itr++) {
+        futures.push_back(std::async(std::launch::async, [this, itr]() {
+            std::vector<pcl::octree::IteratorState> stack(1);
+            auto &state = stack.back();
+            state.node_ = itr.getCurrentOctreeNode();
+            state.key_ = itr.getCurrentOctreeKey();
+            state.depth_ = itr.getCurrentOctreeDepth();
+            itr_t thread_itr(&octree_, 99, &stack.back(), stack);
+            return this->recurse_octree(thread_itr);
+        }));
+    }
+    for(auto & f : futures) {
+        auto r = f.get();
+        for(std::size_t idx=0;idx<breadth_bytes_.size();idx++) {
+            auto & dest = breadth_bytes_.at(idx);
+            auto & src = r.breadth_bytes.at(idx);
+            dest.insert(dest.end(),src.begin(),src.end());
+        }
+        depth_list_.insert(depth_list_.end(),r.depth_list.begin(),r.depth_list.end());
+        point_indices_.insert(point_indices_.end(),r.point_indices.begin(),r.point_indices.end());
+    }
+    generateLeafNodeIndices();
+}
+
+Frame::partial_payload Frame::recurse_octree(octree_t::DepthFirstIterator &dfIt) {
+    struct partial_payload pp;
+    pp.breadth_bytes.resize(octree_depth_);
 
     uint8_t current_first = 0;
     uint8_t current_second = 0;
@@ -312,32 +361,12 @@ void Frame::compressBreadthBytes() {
     int current_second_count = 0;
     vector<uint8_t> current_first_config;
     vector<uint8_t> current_second_config;
-    vector<int> leaf_node_indices;
 
-    for (int i = 0; i < octree_depth_; i++) {
-        vector<uint8_t> temp;
-        breadth_bytes_.push_back(temp);
-    }
-
-    bool isFirst = true;
-    Eigen::Vector3f calc_point = root_center_;
-    float sidelength = root_sidelength_;
-    while (dfIt != dfIt_end && (*dfIt) != 0) {
+    while ((*dfIt) != 0) {
         int currentDepth = dfIt.getCurrentOctreeDepth();
 
-        if (isFirst) {
-            uint8_t temp_byte = dfIt.getNodeConfiguration();
-            bitset<8> bs(temp_byte);
-            for (int i = 0; i < 8; i++) {
-                if (bs[i]) {
-                    calc_point = getChildCenter(calc_point, sidelength, i);
-                    break;
-                }
-            }
-            sidelength = sidelength / 2;
-        }
         if (currentDepth < octree_depth_) {
-            breadth_bytes_.at(currentDepth).push_back(dfIt.getNodeConfiguration());
+            pp.breadth_bytes.at(currentDepth).push_back(dfIt.getNodeConfiguration());
         }
         if (currentDepth == max_breadth_depth_) {
             current_first = dfIt.getNodeConfiguration();
@@ -365,9 +394,7 @@ void Frame::compressBreadthBytes() {
                 }
             }
             current_first_count++;
-        }
-
-        else if (currentDepth == max_breadth_depth_ + 2) {
+        } else if (currentDepth == max_breadth_depth_ + 2) {
             current_second = current_second_config[current_second_count];
             current_third = dfIt.getNodeConfiguration();
             bitset<8> bs(current_third);
@@ -376,33 +403,20 @@ void Frame::compressBreadthBytes() {
                 if (bs[i]) {
                     currentBs.set(i);
                     uint8_t current_last = static_cast<uint8_t>(currentBs.to_ulong());
-                    depth_list_.push_back(current_first);
-                    depth_list_.push_back(current_second);
-                    depth_list_.push_back(current_last);
+                    pp.depth_list.push_back(current_first);
+                    pp.depth_list.push_back(current_second);
+                    pp.depth_list.push_back(current_last);
                 }
             }
             current_second_count++;
-        }
-
-        else if (currentDepth == octree_depth_) {
+        } else if (currentDepth == octree_depth_) {
             vector<int> childIndices;
             getNodesInOctreeContainer(dfIt.getCurrentOctreeNode(), childIndices);
-            point_indices_.push_back(childIndices[0]);
-            if (isFirst) {
-                // printf("from bounding box: %f %f %f\n", calc_point.x(), calc_point.y(),
-                // calc_point.z()); printf("original : %f %f %f\n",
-                // cloud_->points[childIndices[0]].x, cloud_->points[childIndices[0]].y,
-                // cloud_->points[childIndices[0]].z);
-                calc_point = calc_point - Eigen::Vector3f(cloud_->points[childIndices[0]].x,
-                                                          cloud_->points[childIndices[0]].y,
-                                                          cloud_->points[childIndices[0]].z);
-                isFirst = false;
-            }
+            pp.point_indices.push_back(childIndices[0]);
         }
         dfIt++;
     }
-
-    generateLeafNodeIndices();
+    return pp;
 }
 
 void Frame::generatePayload() {
