@@ -92,10 +92,11 @@ void Decoder::decodePDTreeFile(std::string filename) {
     pFile = fopen(filename.c_str(), "rb");
 
     int totalSize = 0;
-    fread(&totalSize, sizeof(int), 1, pFile);
+    int res;
+    res = fread(&totalSize, sizeof(int), 1, pFile);
 
     RxFrameHeader header;
-    fread(&header, sizeof(RxFrameHeader), 1, pFile);
+    res = fread(&header, sizeof(RxFrameHeader), 1, pFile);
 
     printf("[DECODE] =========RxFrameHeader=========\n");
     printf("[DECODE] frame type %d\n", header.frame_type);
@@ -115,10 +116,10 @@ void Decoder::decodePDTreeFile(std::string filename) {
     rxFrame.breadth_leaf_num = (uint8_t *)malloc(header.num_breadth_nodes * sizeof(uint8_t));
     rxFrame.color_bytes = (uint8_t *)malloc(header.num_color_bytes * sizeof(uint8_t));
 
-    fread(rxFrame.breadth_bytes, sizeof(uint8_t), header.num_breadth_bytes, pFile);
-    fread(rxFrame.depth_bytes, sizeof(uint8_t), header.num_depth_bytes, pFile);
-    fread(rxFrame.breadth_leaf_num, sizeof(uint8_t), header.num_breadth_nodes, pFile);
-    fread(rxFrame.color_bytes, sizeof(uint8_t), header.num_color_bytes, pFile);
+    res = fread(rxFrame.breadth_bytes, sizeof(uint8_t), header.num_breadth_bytes, pFile);
+    res = fread(rxFrame.depth_bytes, sizeof(uint8_t), header.num_depth_bytes, pFile);
+    res = fread(rxFrame.breadth_leaf_num, sizeof(uint8_t), header.num_breadth_nodes, pFile);
+    res = fread(rxFrame.color_bytes, sizeof(uint8_t), header.num_color_bytes, pFile);
 
     render_frame_.center_list =
         (Eigen::Vector4f *)malloc(header.num_points * sizeof(Eigen::Vector4f));

@@ -165,6 +165,18 @@ class Frame {
     Resources ress_;
 };
 
+struct ScopeTimer {
+    std::chrono::time_point<std::chrono::high_resolution_clock> t;
+    std::string name_;
+    __attribute__((optimize("O0"))) ScopeTimer(std::string const &name)
+        : name_(name), t(std::chrono::high_resolution_clock::now()) {};
+    __attribute__((optimize("O0"))) ~ScopeTimer() {
+        auto stop_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> ms_double = stop_time - t;
+        std::cout << name_ << ": " << ms_double.count() << "ms" << std::endl;
+    };
+};
+
 class GROOTEncoder {
   public:
     GROOTEncoder(std::string const &morton_code_filename, float voxel_size) {
@@ -175,19 +187,31 @@ class GROOTEncoder {
     typedef pcl::PointCloud<pcl::PointXYZRGB> pc_t;
     typedef pc_t::Ptr pc_ptr_t;
     std::vector<uint8_t> encode(pc_ptr_t const &p) {
-        currentFrame.reset();
-        currentFrame.setPointCloud(p);
-        currentFrame.generateOctree(voxel_size_);
+        {
+            ScopeTimer x("reset");
+            currentFrame.reset();
+        }
+        {
+            ScopeTimer x("setPointCloud");
+            currentFrame.setPointCloud(p);
+        }
+        {
+            ScopeTimer x("generateOctree");
+            currentFrame.generateOctree(voxel_size_);
+        }
         bool is_user_adaptive = false; // with colors
         bool isShort = false;
         currentFrame.compressPDTree(is_user_adaptive, isShort);
-        if (is_user_adaptive) {
-            currentFrame.generatePayload();
-        } else {
-            vector<uint8_t> colors = currentFrame.getColorBytes();
-            vector<uint8_t> compressed_colors;
-            compressColors(colors, compressed_colors, jpegEncoder_);
-            currentFrame.generatePayload(compressed_colors);
+        {
+            ScopeTimer x("generatePayload");
+            if (is_user_adaptive) {
+                currentFrame.generatePayload();
+            } else {
+                vector<uint8_t> colors = currentFrame.getColorBytes();
+                vector<uint8_t> compressed_colors;
+                compressColors(colors, compressed_colors, jpegEncoder_);
+                currentFrame.generatePayload(compressed_colors);
+            }
         }
         return currentFrame.extractPayload();
     }

@@ -132,7 +132,10 @@ void Frame::generateOctree(float voxelSize) {
     octree_.setResolution(voxelSize);
     octree_.setInputCloud(cloud_);
     octree_.defineBoundingBox();
-    octree_.addPointsFromInputCloud();
+    {
+        ScopeTimer x("   addPointsFromInputCloud");
+        octree_.addPointsFromInputCloud();
+    }
 
     double min_x, min_y, min_z, max_x, max_y, max_z;
     octree_.getBoundingBox(min_x, min_y, min_z, max_x, max_y, max_z);
@@ -149,17 +152,7 @@ void Frame::generateOctree(float voxelSize) {
     // printf("Side Length: %f\n", root_sidelength_);
     // printf("------------------------------------------\n");
 }
-struct ScopeTimer {
-    std::chrono::time_point<std::chrono::high_resolution_clock> t;
-    std::string name_;
-    __attribute__((optimize("O0"))) ScopeTimer(std::string const &name)
-        : name_(name), t(std::chrono::high_resolution_clock::now()) {};
-    __attribute__((optimize("O0"))) ~ScopeTimer() {
-        auto stop_time = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> ms_double = stop_time - t;
-        std::cout << name_ << ": " << ms_double.count() << "ms" << std::endl;
-    };
-};
+
 
 void Frame::compressPDTree(int is_user_adaptive, bool isShort) {
     // Encode only last two depths if point cloud is dense

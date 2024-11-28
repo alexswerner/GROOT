@@ -96,13 +96,13 @@ int main(int argc, char *argv[]) {
         pc.map_to(color);
         // This call should direction insert points into the octree
         auto points = pc.calculate(depth);
-
+        auto pointcloud = points_to_pcl(points, color);
         auto start_time = std::chrono::high_resolution_clock::now();
-        auto payload = enc.encode(points_to_pcl(points, color));
-        outfile.write(reinterpret_cast<char const *>(payload.data()),payload.size());
+        auto payload = enc.encode(pointcloud);
         auto stop_time = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> ms_double = stop_time - start_time;
         std::cout << "time: " << ms_double.count() << std::endl;
+        outfile.write(reinterpret_cast<char const *>(payload.data()),payload.size());
     }
     return 0;
 }
