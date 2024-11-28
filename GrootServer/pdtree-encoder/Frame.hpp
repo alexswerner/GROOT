@@ -15,7 +15,7 @@
 #include <pcl/octree/octree.h>
 #include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <pcl/common/transforms.h>
-#include <zstd.h>
+#include "JpegEncoder.hpp"
 
 using namespace std;
 using PointType = pcl::PointXYZRGB;
@@ -57,7 +57,6 @@ struct Resources
     uint8_t *cBuffer;
     size_t fBufferSize;
     size_t cBufferSize;
-    ZSTD_CCtx *cctx;
 };
 
 class Frame
@@ -84,6 +83,7 @@ public:
     // generate payload with or without color
     void generatePayload();
     void generatePayload(vector<uint8_t> compressed_colors);
+    std::vector<uint8_t> extractPayload();
 
     void reset()
     {
@@ -133,8 +133,6 @@ protected:
     void compressBreadthBytesShort();
     // functions to compress depth bytes
     void compressDepthBytes(int is_user_adaptive);
-    void compressDepthBytesZstd(vector<uint8_t> depth_bytes);
-
     // variables
 
     int frame_index_ = 0;
@@ -168,5 +166,92 @@ protected:
     vector<vector<int>> child_indices_;
 
     Resources ress_;
-    vector<uint8_t> depth_bytes_zstd_;
+};
+
+class GROOTEncoder
+{
+public:
+    GROOTEncoder(std::string const &morton_code_filename, float voxel_size)
+    {
+        voxel_size_ = voxel_size;
+        readImageCoder(morton_code_filename);
+        jpegEncoder_ = new JpegEncoder();
+    }
+    typedef pcl::PointCloud<pcl::PointXYZRGB> pc_t;
+    typedef pc_t::Ptr pc_ptr_t;
+    std::vector<uint8_t> encode(pc_ptr_t const &p)
+    {
+        currentFrame.reset();
+        currentFrame.setPointCloud(p);
+        currentFrame.generateOctree(voxel_size_);
+        bool is_user_adaptive = false; // with colors
+        bool isShort = false;
+        currentFrame.compressPDTree(is_user_adaptive, isShort);
+        if (is_user_adaptive)
+        {
+            currentFrame.generatePayload();
+        }
+        else
+        {
+            vector<uint8_t> colors = currentFrame.getColorBytes();
+            vector<uint8_t> compressed_colors;
+            compressColors(colors, compressed_colors, jpegEncoder_);
+            currentFrame.generatePayload(compressed_colors);
+        }
+        return currentFrame.extractPayload();
+    }
+
+protected:
+    float voxel_size_;
+    void readImageCoder(std::string const &imagecoder)
+    {
+        int imgSize = 1024;
+        image_coder_order_ = new int[imgSize * imgSize];
+        FILE *pFile = fopen(imagecoder.c_str(), "rb");
+        std::size_t res = fread(&image_coder_order_[0], sizeof(int), imgSize * imgSize, pFile);
+        if (res == 0)
+            throw std::runtime_error("Failed to read ImageCoder");
+        fclose(pFile);
+    }
+
+    int *image_coder_order_;
+
+    // prepare jpeg encoder
+    JpegEncoder *jpegEncoder_;
+
+    void compressColors(vector<uint8_t> orig_colors, vector<uint8_t> &compressed_colors, JpegEncoder *jpegEncoder_)
+    {
+        int color_size = orig_colors.size();
+        int image_width = 1024;
+        int image_height = 1024;
+
+        if (orig_colors.size() / 3 < 1024 * 512)
+        {
+            image_height = 512;
+        }
+        else if (orig_colors.size() / 3 >= 1024 * 1024)
+        {
+            image_width = 2048;
+        }
+
+        std::vector<uint8_t> reordered_color(image_width * image_height * 3, 255);
+        for (int i = 0; i < image_width * image_height; i++)
+        {
+            // for GROOT use this
+            int idx = image_coder_order_[i];
+            // for SERIAL use this
+            // int idx = i;
+            if (idx < orig_colors.size() / 3)
+            {
+                reordered_color[3 * i] = orig_colors[3 * idx];
+                reordered_color[3 * i + 1] = orig_colors[3 * idx + 1];
+                reordered_color[3 * i + 2] = orig_colors[3 * idx + 2];
+            }
+        }
+
+        // for GROOT
+        jpegEncoder_->encode(reordered_color, compressed_colors, image_width, image_height);
+    }
+
+    Frame currentFrame;
 };

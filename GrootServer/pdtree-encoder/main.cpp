@@ -8,65 +8,7 @@
 #include <math.h>
 #include <pcl/filters/passthrough.h>
 #include "Frame.hpp"
-#include "JpegEncoder.hpp"
 
-// color coding order read from file
-int *image_coder_order_;
-
-void compressColors(vector<uint8_t> orig_colors, vector<uint8_t> &compressed_colors, JpegEncoder *jpegEncoder_)
-{
-    int color_size = orig_colors.size();
-    int image_width = 1024;
-    int image_height = 1024;
-
-    if (orig_colors.size() / 3 < 1024 * 512)
-    {
-        image_height = 512;
-    }
-    else if (orig_colors.size() / 3 >= 1024 * 1024)
-    {
-        image_width = 2048;
-    }
-
-    vector<uint8_t> reordered_color(image_width * image_height * 3, 255);
-    for (int i = 0; i < image_width * image_height; i++)
-    {
-        // for GROOT use this
-        int idx = image_coder_order_[i];
-        // for SERIAL use this
-        // int idx = i;
-        if (idx < orig_colors.size() / 3)
-        {
-            reordered_color[3 * i] = orig_colors[3 * idx];
-            reordered_color[3 * i + 1] = orig_colors[3 * idx + 1];
-            reordered_color[3 * i + 2] = orig_colors[3 * idx + 2];
-        }
-    }
-
-    //printf("COmpress color\n");
-    //    compressed_colors.resize(orig_colors.size());
-
-    /* for no compression use this
-    compressed_colors.resize(reordered_color.size());
-    memcpy(&compressed_colors[0], &reordered_color[0], reordered_color.size());*/
-
-    // for GROOT
-    jpegEncoder_->encode(reordered_color, compressed_colors, image_width, image_height);
-
-    // FILE* pFile = fopen("test_output_groot.jpeg", "wb");
-    // fwrite(&compressed_colors[0], sizeof(uint8_t), compressed_colors.size(), pFile);
-}
-
-void readImageCoder(string imagecoder)
-{
-    int imgSize = 1024;
-    image_coder_order_ = new int[imgSize * imgSize];
-    FILE *pFile = fopen(imagecoder.c_str(), "rb");
-    std::size_t res = fread(&image_coder_order_[0], sizeof(int), imgSize * imgSize, pFile);
-    if (res == 0)
-        throw std::runtime_error("Failed to read ImageCoder");
-    fclose(pFile);
-}
 std::tuple<int, int, int> RGB_Texture(rs2::video_frame texture, rs2::texture_coordinate Texture_XY)
 {
     // Get Width and Height coordinates of texture
@@ -125,13 +67,12 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_to_pcl(const rs2::points &points, 
 
     return newCloud;
 }
+
 int main(int argc, char *argv[])
 {
     std::string morton_code = argv[1];
 
-    // read in color coder file
-    readImageCoder(morton_code);
-
+    GROOTEncoder enc(morton_code, 0.002);
     // set transformation and voxel size for input dataset
 
     static rs2::pipeline pipe;
@@ -145,77 +86,25 @@ int main(int argc, char *argv[])
                          rs2_rs400_visual_preset::RS2_RS400_VISUAL_PRESET_HIGH_ACCURACY);
     ir_sensor.set_option(rs2_option::RS2_OPTION_DEPTH_UNITS, 0.001f);
 
-    // prepare jpeg encoder
-    JpegEncoder *jpegEncoder_;
-    jpegEncoder_ = new JpegEncoder();
     unsigned int avgCompSize = 0;
-    Frame currentFrame;
     while (true)
     {
         // cout << "[MAIN] File name " << filelist[i] << endl;
         //  TODO: read input from librealsense frame
         auto frames = pipe.wait_for_frames();
-        auto start_time = std::chrono::high_resolution_clock::now();
-        auto print_time = [&]()
-        {
-            auto stop_time = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double, std::milli> ms_double = stop_time - start_time;
-            std::cout << "time: " << ms_double.count() << std::endl;
-        };
-
-        currentFrame.reset();
-        std::cout << "After reset" << std::endl;
-        print_time();
-        
 
         auto depth = frames.get_depth_frame();
         auto color = frames.get_color_frame();
         rs2::pointcloud pc;
         pc.map_to(color);
-        std::cout << "After acqu" << std::endl;
-        print_time();
         // This call should direction insert points into the octree
         auto points = pc.calculate(depth);
-        std::cout << "After calculate" << std::endl;
-        print_time();
 
-        currentFrame.setPointCloud(points_to_pcl(points, color));
-        printf("After reading point cloud, size: %li\n", currentFrame.getPointCloud()->points.size());
-        print_time();
-        float voxelSize = 0.002;
-        currentFrame.generateOctree(voxelSize);
-        printf("After generating octree\n");
-        print_time();
-        bool is_user_adaptive = false; // with colors
-        bool isShort = false;
-        currentFrame.compressPDTree(is_user_adaptive, isShort);
-        printf("After pdtree compression\n");
-        print_time();
-        if (is_user_adaptive)
-        {
-            currentFrame.generatePayload();
-        }
-        else
-        {
-            // printf("[MAIN] Finished geometry compression\n");
-            //  TODO move color compression to Frame class
-            vector<uint8_t> colors = currentFrame.getColorBytes();
-            vector<uint8_t> compressed_colors;
-            compressColors(colors, compressed_colors, jpegEncoder_);
-            currentFrame.generatePayload(compressed_colors);
-            // out_file = out_file + "_enc.bin";
-        }
-        printf("After color compression\n");
-        print_time();
-        // printf("[MAIN] write frame\n");
-        unsigned int avgCompSize = 0;
-        currentFrame.writeFrame("/dev/null", &avgCompSize);
+        auto start_time = std::chrono::high_resolution_clock::now();
+        enc.encode(points_to_pcl(points, color));
         auto stop_time = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> ms_double = stop_time - start_time;
-        std::cout << "Compressed frame size: " << avgCompSize << " time: " << ms_double.count() << std::endl;
-        std::cout << "After writing frame" << std::endl;
-        print_time();
+        std::cout << "time: " << ms_double.count() << std::endl;
     }
-
-    // printf("[MAIN] Final Compressed Size: %d\n", avgCompSize / filelist.size());
+    return 0;
 }

@@ -720,29 +720,6 @@ void Frame::compressDepthBytes(int is_user_adaptive)
     }
 }
 
-/*
-  Testing zstd compression library
-*/
-void Frame::compressDepthBytesZstd(vector<uint8_t> depth_bytes)
-{
-    for (int i = 0; i < 10; i++)
-    {
-        printf("[FRAME] sample depth bytes : %d\n", depth_bytes[i]);
-    }
-    for (int i = depth_bytes.size() - 10; i < depth_bytes.size(); i++)
-    {
-        printf("[FRAME] sample depth bytes : %d\n", depth_bytes[i]);
-    }
-    printf("[FRAME] compress zstd\n");
-    memcpy(ress_.fBuffer, &depth_bytes[0], depth_bytes.size() * sizeof(uint8_t));
-    int fSize = depth_bytes.size();
-    size_t const cSize = ZSTD_compressCCtx(ress_.cctx, ress_.cBuffer, ress_.cBufferSize, ress_.fBuffer, fSize, 1);
-
-    printf("[Frame] compressed depth bytes : %li\n", cSize);
-    depth_bytes_zstd_.resize(cSize);
-    memcpy(&depth_bytes_zstd_[0], ress_.cBuffer, cSize);
-}
-
 void Frame::writeFrame(std::string filename, unsigned int *avgSize)
 {
     generateHeader('I');
@@ -774,6 +751,42 @@ void Frame::writeFrame(std::string filename, unsigned int *avgSize)
     // printf("Header sidelength: %f\n", header_.root_sidelength);
 
     cloud_.reset();
+}
+
+template <typename T>
+uint8_t* write_obj(uint8_t* ptr, T const & obj) {
+    std::size_t size = sizeof(T);
+    std::memcpy(static_cast<void*>(ptr),
+        static_cast<void const*>(&obj),size);
+    return ptr + size;
+}
+
+
+uint8_t* write_vec(uint8_t* ptr, std::vector<uint8_t> const & obj) {
+    std::size_t size = obj.size();
+    std::memcpy(static_cast<void*>(ptr),
+        static_cast<void const*>(obj.data()),size);
+    return ptr + size;
+}
+
+
+std::vector<uint8_t> Frame::extractPayload() {
+    generateHeader('I');
+
+    int totalSize = sizeof(FrameHeader) + payload_.breadth_bytes.size() + payload_.depth_bytes.size() + payload_.breadth_leaf_indices.size() + payload_.color_bytes.size();
+    std::vector<uint8_t> result(sizeof(int) + totalSize);
+    auto ptr = result.data();
+    ptr = write_obj(ptr, totalSize);
+    ptr = write_obj(ptr, header_);
+
+    ptr = write_vec(ptr, payload_.breadth_bytes);
+    ptr = write_vec(ptr, payload_.depth_bytes);
+
+    ptr = write_vec(ptr, payload_.breadth_leaf_indices);
+    ptr = write_vec(ptr, payload_.color_bytes);
+    
+    assert(ptr-result.data()==result.size());
+    return result;
 }
 
 /*
