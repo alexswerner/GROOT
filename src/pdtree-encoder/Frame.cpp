@@ -134,7 +134,7 @@ void Frame::generateOctree(float voxelSize) {
     octree_.setInputCloud(cloud_);
     octree_.defineBoundingBox();
     {
-        ScopeTimer x("   addPointsFromInputCloud");
+        //ScopeTimer x("   addPointsFromInputCloud");
         octree_.addPointsFromInputCloud();
     }
 
@@ -154,18 +154,17 @@ void Frame::generateOctree(float voxelSize) {
     // printf("------------------------------------------\n");
 }
 
-
 void Frame::compressPDTree(int is_user_adaptive, bool isShort) {
     // Encode only last two depths if point cloud is dense
     // default is three for sparse point clouds
     if (isShort) {
         max_breadth_depth_ += 1;
         {
-            ScopeTimer x("compressBreadthBytesShort");
+            //ScopeTimer x("compressBreadthBytesShort");
             compressBreadthBytesShort();
         }
         {
-            ScopeTimer x("reorderDepthColorShort");
+            //ScopeTimer x("reorderDepthColorShort");
             reorderDepthColorShort();
         }
     } else {
@@ -322,7 +321,6 @@ void Frame::compressBreadthBytes() {
     //   Here the stack containing only the child node should stop the iterator from going back up
     //   the tree
 
-     
 
     std::vector<std::future<partial_payload>> futures;
     for (auto itr = (++octree_.depth_begin(1)); itr != octree_.depth_end() && (*itr) != 0; itr++) {

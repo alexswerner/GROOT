@@ -55,6 +55,18 @@ struct Resources {
     size_t cBufferSize;
 };
 
+struct ScopeTimer {
+    std::chrono::time_point<std::chrono::high_resolution_clock> t;
+    std::string name_;
+    __attribute__((optimize("O0"))) ScopeTimer(std::string const &name)
+        : name_(name), t(std::chrono::high_resolution_clock::now()) {};
+    __attribute__((optimize("O0"))) ~ScopeTimer() {
+        auto stop_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> ms_double = stop_time - t;
+        std::cout << name_ << ": " << ms_double.count() << "ms" << std::endl;
+    };
+};
+
 class Frame {
   public:
     Frame();
@@ -97,10 +109,13 @@ class Frame {
         child_indices_.clear();
 
         // With ChangeDetector octree
-        // octree_.switchBuffers();
+        // octree_.switchBuffers(); - this is 5ms slower than deleteTree
 
         // Normal octree
+        {
+            ScopeTimer x("deleteTree");
         octree_.deleteTree();
+        }
         pcl::PointCloud<PointType>::Ptr temp_cloud(new pcl::PointCloud<PointType>);
         cloud_ = temp_cloud;
         initialize();
@@ -174,17 +189,6 @@ class Frame {
     Resources ress_;
 };
 
-struct ScopeTimer {
-    std::chrono::time_point<std::chrono::high_resolution_clock> t;
-    std::string name_;
-    __attribute__((optimize("O0"))) ScopeTimer(std::string const &name)
-        : name_(name), t(std::chrono::high_resolution_clock::now()) {};
-    __attribute__((optimize("O0"))) ~ScopeTimer() {
-        auto stop_time = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> ms_double = stop_time - t;
-        std::cout << name_ << ": " << ms_double.count() << "ms" << std::endl;
-    };
-};
 
 class GROOTEncoder {
   public:
@@ -201,7 +205,7 @@ class GROOTEncoder {
             currentFrame.reset();
         }
         {
-            ScopeTimer x("setPointCloud");
+            // ScopeTimer x("setPointCloud");
             currentFrame.setPointCloud(p);
         }
         {
